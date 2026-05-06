@@ -154,6 +154,16 @@ tr:hover td{background:var(--row);cursor:pointer}
 .bn-meta{display:flex;gap:1rem;margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border)}
 .bn-m{font-size:.7rem;color:var(--muted)}.bn-m span{color:var(--text);font-weight:600}
 
+/* ── Loading state ── */
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 2rem;gap:1.4rem}
+.loader-ring{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .9s linear infinite}
+.loader-text{font-size:.8rem;color:var(--muted);text-align:center;line-height:1.7}
+.loader-text strong{display:block;color:var(--text);font-size:.88rem;margin-bottom:.3rem}
+.loader-dots span{display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--muted);margin:0 2px;animation:dotpulse 1.2s ease-in-out infinite}
+.loader-dots span:nth-child(2){animation-delay:.2s}
+.loader-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dotpulse{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+
 /* overlay */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)}
 .overlay.show{display:flex}
@@ -324,6 +334,17 @@ tr:hover td{background:var(--row);cursor:pointer}
 
 <script>
 const API = '';
+
+function loadingHTML(title, sub) {
+  return `<div class="loader">
+    <div class="loader-ring"></div>
+    <div class="loader-text">
+      <strong>${title}</strong>
+      ${sub || ''}
+      <div class="loader-dots" style="margin-top:.6rem"><span></span><span></span><span></span></div>
+    </div>
+  </div>`;
+}
 document.getElementById('land-date').textContent = new Date().toLocaleDateString('en-SE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 let chartInstance = null, taskPoller = null, logPoller = null;
 let logOffset = 0, activeTab = 'my';
@@ -358,7 +379,7 @@ function showTab(name) {
 
 // ── My Stocks ──────────────────────────────────────────────────────────────────
 async function refreshSignals() {
-  document.getElementById('signals-grid').innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('signals-grid').innerHTML = loadingHTML('Loading signals', 'Fetching latest prices &amp; model scores');
   try {
     const d = await apiFetch('/api/signals');
     document.getElementById('signals-grid').innerHTML = d.map(s => {
@@ -440,7 +461,7 @@ async function loadSummary() {
 // ── Buy Now ────────────────────────────────────────────────────────────────────
 async function loadBuyNow() {
   const el = document.getElementById('alerts-content');
-  el.innerHTML = '<div class="empty">Scanning news + model signals... takes ~30 seconds.</div>';
+  el.innerHTML = loadingHTML('Scanning for buy signals', 'Checking model, news &amp; volume for every stock — takes ~30s');
   try {
     const data = await apiFetch('/api/buy-now');
     const badge = document.getElementById('badge-alerts');
@@ -480,7 +501,7 @@ function buyNowCard(s) {
 // ── Penny / Hype ───────────────────────────────────────────────────────────────
 async function loadPenny() {
   const el = document.getElementById('penny-content');
-  el.innerHTML = '<div class="empty">Scanning Reddit for penny stocks... takes ~30 seconds.</div>';
+  el.innerHTML = loadingHTML('Scanning Reddit for penny stocks', 'Scraping 15 subreddits + fetching stock data — takes ~30s');
   try {
     const data = await apiFetch('/api/penny-stocks');
     if (!data.length) { el.innerHTML = '<div class="empty">No penny stocks found right now. Try again later.</div>'; return; }
@@ -564,7 +585,7 @@ function pennyCard(s) {
 // ── Scanner ────────────────────────────────────────────────────────────────────
 async function loadScan(type) {
   const el = document.getElementById(type==='swing'?'swing-content':'longterm-content');
-  el.innerHTML = '<div class="empty">Scanning... may take 30-60 seconds.</div>';
+  el.innerHTML = loadingHTML('Running model scan', 'Scoring S&amp;P 500 + Reddit picks — takes ~30-60s');
   try {
     const st = await apiFetch('/api/universal-status');
     if (!(type==='swing'?st.swing:st.longterm)) {
@@ -620,7 +641,7 @@ function switchAndChart(ticker) {
 
 // ── Reddit ─────────────────────────────────────────────────────────────────────
 async function loadReddit() {
-  document.getElementById('reddit-content').innerHTML = '<div class="empty">Fetching...</div>';
+  document.getElementById('reddit-content').innerHTML = loadingHTML('Scraping Reddit', '15 subreddits + comments — takes ~60s');
   try {
     const d = await apiFetch('/api/reddit');
     if (d.error) throw new Error(d.error);
