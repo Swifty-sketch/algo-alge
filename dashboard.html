@@ -154,6 +154,16 @@ tr:hover td{background:var(--row);cursor:pointer}
 .bn-meta{display:flex;gap:1rem;margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border)}
 .bn-m{font-size:.7rem;color:var(--muted)}.bn-m span{color:var(--text);font-weight:600}
 
+/* ── Custom watchlist ── */
+.add-row{display:flex;gap:.5rem;margin-bottom:1.2rem;align-items:center}
+.ticker-input{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.42rem .85rem;font-size:.82rem;color:var(--text);font-family:inherit;width:160px;transition:border-color .15s}
+.ticker-input:focus{outline:none;border-color:#555}
+.ticker-input::placeholder{color:var(--muted)}
+.sc{position:relative}
+.sc-remove{position:absolute;top:.35rem;right:.35rem;background:none;border:none;color:var(--muted);font-size:.95rem;cursor:pointer;line-height:1;padding:0}
+.sc-remove:hover{color:var(--red)}
+.custom-empty{font-size:.75rem;color:var(--muted);padding:.5rem 0 1.2rem}
+
 /* ── Loading state ── */
 .loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 2rem;gap:1.4rem}
 .loader-ring{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .9s linear infinite}
@@ -258,7 +268,17 @@ tr:hover td{background:var(--row);cursor:pointer}
 
   <!-- My Stocks -->
   <div class="pane" id="pane-my">
-    <p class="sec-label">Buy probability — click a card to load chart</p>
+
+    <p class="sec-label">My watchlist</p>
+    <div class="add-row">
+      <input class="ticker-input" id="ticker-input" type="text" placeholder="Add ticker (e.g. AAPL)"
+        onkeydown="if(event.key==='Enter')addCustomTicker()" maxlength="10" autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary" onclick="addCustomTicker()">Add</button>
+    </div>
+    <div class="sig-grid" id="custom-grid"></div>
+    <p class="custom-empty" id="custom-hint" style="display:none">Type a ticker above and press Add or Enter.</p>
+
+    <p class="sec-label" style="margin-top:1.2rem">Swedish stocks — buy probability</p>
     <div class="sig-grid" id="signals-grid"><div class="empty">Loading...</div></div>
     <div class="chart-box">
       <div class="chart-hdr">
@@ -354,9 +374,90 @@ function enterApp() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('app').style.display     = 'flex';
   showTab('alerts');
+  loadCustomTickers();
   refreshSignals();
   loadSummary();
   pollTask();
+}
+
+// ── Custom watchlist ────────────────────────────────────────────────────────────
+const _WKEY = 'marsel_watchlist_v1';
+
+function _getWatchlist()  { try { return JSON.parse(localStorage.getItem(_WKEY)) || []; } catch { return []; } }
+function _saveWatchlist(t){ localStorage.setItem(_WKEY, JSON.stringify(t)); }
+
+function _syncHint() {
+  const hint = document.getElementById('custom-hint');
+  if (hint) hint.style.display = _getWatchlist().length === 0 ? 'block' : 'none';
+}
+
+async function addCustomTicker() {
+  const inp    = document.getElementById('ticker-input');
+  const ticker = inp.value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+  if (!ticker) return;
+  inp.value = '';
+
+  const list = _getWatchlist();
+  if (list.includes(ticker)) return;
+  list.push(ticker);
+  _saveWatchlist(list);
+  _syncHint();
+
+  _insertCustomCard(ticker, true);
+  await _fetchCustomSignal(ticker);
+}
+
+function removeCustomTicker(ticker) {
+  _saveWatchlist(_getWatchlist().filter(t => t !== ticker));
+  const el = document.getElementById('csc-' + ticker);
+  if (el) el.remove();
+  _syncHint();
+}
+
+function _insertCustomCard(ticker, loading) {
+  const grid = document.getElementById('custom-grid');
+  const div  = document.createElement('div');
+  div.id        = 'csc-' + ticker;
+  div.className = 'sc dim';
+  div.innerHTML = loading
+    ? `<button class="sc-remove" onclick="removeCustomTicker('${ticker}')">×</button>
+       <p class="sc-tk">${ticker}</p><p class="sc-pct neutral" style="font-size:.9rem">...</p>`
+    : '';
+  grid.appendChild(div);
+}
+
+async function _fetchCustomSignal(ticker) {
+  const div = document.getElementById('csc-' + ticker);
+  if (!div) return;
+  try {
+    const d   = await apiFetch('/api/signal/' + encodeURIComponent(ticker));
+    if (d.error) throw new Error(d.error);
+    const pct = Math.round(d.signal * 100);
+    const cls = pct >= 70 ? 'bull' : pct <= 45 ? 'bear' : 'neutral';
+    const lbl = pct >= 70 ? 'BUY'  : pct <= 45 ? 'SELL' : 'HOLD';
+    const cc  = (d.change_1d || 0) >= 0 ? 'pos' : 'neg';
+    div.className = 'sc ' + cls;
+    div.innerHTML = `
+      <button class="sc-remove" onclick="removeCustomTicker('${ticker}')">×</button>
+      <p class="sc-tk">${ticker}</p>
+      <p class="sc-pct ${cls}">${pct}%</p>
+      <p class="sc-price">${d.price}</p>
+      <p class="sc-chg ${cc}">${d.change_1d >= 0 ? '+' : ''}${d.change_1d}% today</p>
+      <p class="sc-lbl ${cls}">${lbl}</p>`;
+  } catch(e) {
+    div.className = 'sc dim';
+    div.innerHTML = `
+      <button class="sc-remove" onclick="removeCustomTicker('${ticker}')">×</button>
+      <p class="sc-tk">${ticker}</p>
+      <p style="font-size:.65rem;color:var(--red);margin-top:.3rem">Not found</p>`;
+  }
+}
+
+async function loadCustomTickers() {
+  const list = _getWatchlist();
+  _syncHint();
+  for (const t of list) _insertCustomCard(t, true);
+  await Promise.all(list.map(_fetchCustomSignal));
 }
 function goHome() {
   document.getElementById('app').style.display     = 'none';

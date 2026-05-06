@@ -463,6 +463,40 @@ def api_penny_stocks():
     return jsonify(results)
 
 
+@app.route('/api/signal/<ticker>')
+def api_single_signal(ticker):
+    ticker = ticker.upper().strip()
+    try:
+        model = load_universal('swing')
+        if model is None:
+            model = load_model(ticker)
+        if model is None:
+            return jsonify({'error': 'Train the US swing model first (Train US Models button).'}), 404
+
+        df = fetch(ticker, period='5y', interval='1d', use_cache=True)
+        if df is None or len(df) < 250:
+            return jsonify({'error': f'Not enough data for {ticker}'}), 404
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        feat_df   = add_features(df)
+        feat_cols = [c for c in feat_df.columns if c not in _FEAT_DROP]
+        X = feat_df[feat_cols].replace([np.inf, -np.inf], np.nan).dropna()
+        if X.empty:
+            return jsonify({'error': 'Could not compute features'}), 404
+
+        prob      = float(model.predict_proba(X.iloc[[-1]])[:, 1][0])
+        close     = df['Close'].squeeze()
+        price     = round(float(close.iloc[-1]), 2)
+        change_1d = round(float(close.pct_change().iloc[-1]) * 100, 2)
+        label     = 'BUY' if prob >= 0.70 else ('SELL' if prob <= 0.45 else 'HOLD')
+
+        return jsonify({'ticker': ticker, 'signal': round(prob, 3),
+                        'price': price, 'change_1d': change_1d, 'label': label})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def _get_news(ticker):
     try:
         import yfinance as yf
