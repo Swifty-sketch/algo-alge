@@ -16,7 +16,7 @@ from src.features import add_features
 from src.train import train_all, load_model
 from src.backtest import run_all
 from src.scanner import train_universal, scan, load_universal, SWING_CFG, LONGTERM_CFG
-from src.universe import get_sp100, get_sp500, get_reddit_tickers
+from src.universe import get_sp100, get_sp500, get_all_listed, get_reddit_tickers
 
 app = Flask(__name__)
 CORS(app)
@@ -220,25 +220,27 @@ def api_scan(model_type):
 
     sp500 = get_sp500()
 
-    # add validated reddit tickers to the pool
+    # pull reddit mentions — 15 subs, 100 posts each + comments
     reddit_raw = []
     try:
-        reddit_raw = get_reddit_tickers(limit=25)
+        reddit_raw = get_reddit_tickers(limit=100)
     except Exception as e:
         print(f'[reddit] fetch error: {e}')
 
     reddit_tickers = [t for t, _ in reddit_raw]
-    all_tickers    = list(dict.fromkeys(sp500 + reddit_tickers))  # dedupe, preserve order
+    sp500_set      = set(sp500)
+    reddit_set     = set(reddit_tickers)
+
+    # union: S&P 500 base + everything Reddit is talking about
+    all_tickers = list(dict.fromkeys(sp500 + reddit_tickers))
+    print(f'[scan] scanning {len(all_tickers)} stocks ({len(sp500)} S&P500 + {len(reddit_tickers)} Reddit)')
 
     results = scan(all_tickers, model_type)
 
-    # tag each result with its source
-    sp100_set      = set(sp100)
-    reddit_set     = set(reddit_tickers)
     for r in results:
         sources = []
-        if r['ticker'] in sp100_set:
-            sources.append('S&P100')
+        if r['ticker'] in sp500_set:
+            sources.append('S&P 500')
         if r['ticker'] in reddit_set:
             sources.append('Reddit')
         r['source'] = ', '.join(sources) if sources else 'Other'
@@ -249,7 +251,7 @@ def api_scan(model_type):
 @app.route('/api/reddit')
 def api_reddit():
     try:
-        tickers = get_reddit_tickers(limit=30)
+        tickers = get_reddit_tickers(limit=100)
         return jsonify([{'ticker': t, 'mentions': c} for t, c in tickers])
     except Exception as e:
         return jsonify({'error': str(e)}), 500

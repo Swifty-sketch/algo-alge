@@ -289,7 +289,7 @@ tr:hover td{background:var(--row);cursor:pointer}
     <div class="scan-hdr">
       <div>
         <p class="sec-label">Swing trades — 3-day forecast</p>
-        <p style="font-size:.75rem;color:var(--muted)">Model confidence for 1.5%+ gain in 3 days. S&P 500 + Reddit picks.</p>
+        <p style="font-size:.75rem;color:var(--muted)">S&P 500 + whatever Reddit is talking about right now. Scored by model confidence.</p>
       </div>
       <button class="btn btn-ghost" onclick="loadScan('swing')">Refresh</button>
     </div>
@@ -313,7 +313,7 @@ tr:hover td{background:var(--row);cursor:pointer}
     <div class="scan-hdr">
       <div>
         <p class="sec-label">Trending on Reddit</p>
-        <p style="font-size:.75rem;color:var(--muted)">Most-mentioned tickers in r/wallstreetbets, r/stocks, r/investing, r/options</p>
+        <p style="font-size:.75rem;color:var(--muted)">15 subreddits scraped — posts + comments. Ranked by total mentions.</p>
       </div>
       <button class="btn btn-ghost" onclick="loadReddit()">Refresh</button>
     </div>
