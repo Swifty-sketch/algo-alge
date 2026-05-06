@@ -485,14 +485,20 @@ def api_single_signal(ticker):
         if X.empty:
             return jsonify({'error': 'Could not compute features'}), 404
 
-        prob      = float(model.predict_proba(X.iloc[[-1]])[:, 1][0])
-        close     = df['Close'].squeeze()
-        price     = round(float(close.iloc[-1]), 2)
-        raw_chg   = close.pct_change().iloc[-1]
-        change_1d = round(float(raw_chg) * 100, 2) if np.isfinite(raw_chg) else 0.0
-        label     = 'BUY' if prob >= 0.70 else ('SELL' if prob <= 0.45 else 'HOLD')
+        def _f(v, digits=2):
+            try:
+                v = float(v)
+                return round(v, digits) if np.isfinite(v) else None
+            except Exception:
+                return None
 
-        return jsonify({'ticker': ticker, 'signal': round(prob, 3),
+        prob      = _f(model.predict_proba(X.iloc[[-1]])[:, 1][0], 3)
+        close     = df['Close'].squeeze()
+        price     = _f(close.iloc[-1])
+        change_1d = _f(close.pct_change().iloc[-1] * 100) or 0.0
+        label     = 'BUY' if (prob or 0) >= 0.70 else ('SELL' if (prob or 1) <= 0.45 else 'HOLD')
+
+        return jsonify({'ticker': ticker, 'signal': prob,
                         'price': price, 'change_1d': change_1d, 'label': label})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
