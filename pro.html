@@ -177,7 +177,7 @@ main{max-width:1200px;margin:0 auto;padding:1.5rem;width:100%}
   <main>
     <div class="intro">
       <h2>How this differs from the main dashboard</h2>
-      <p>Three models vote on every signal: <strong>XGBoost + LightGBM + Random Forest</strong>. Trained on 50+ technical indicators including ADX, Stochastic, MFI, OBV, multi-timeframe momentum, and 52-week distances. Daily and weekly trends must agree before BUY. Each pick comes with a recommended position size and ATR-based stop loss / take profit.</p>
+      <p>Three models vote on every signal: <strong>XGBoost + LightGBM + Random Forest</strong>. Trained on 50+ indicators (ADX, Stochastic, MFI, OBV, multi-timeframe momentum, 52-week distances, and more) — using <strong>only the stocks in your watchlist</strong>, so the model specializes in the names you actually trade. Daily and weekly trends must agree before BUY. Each pick includes a position size and ATR-based stop / take profit.</p>
     </div>
 
     <p class="sec-label">Add a stock</p>
@@ -253,7 +253,7 @@ async function enterApp() {
     if (!c.trained) {
       document.getElementById('stocks-grid').innerHTML =
         `<div class="empty"><strong style="color:var(--gold);font-size:1rem;display:block;margin-bottom:.5rem">Pro model not trained yet</strong>
-          Click <strong>Train Pro Model</strong> in the header to train the ensemble. Takes 30-60 minutes.</div>`;
+          Add the stocks you want to trade to your watchlist (above), then click <strong>Train Pro Model</strong> in the header. The model will learn patterns specific to those stocks.</div>`;
       return;
     }
     loadAll();
@@ -374,10 +374,19 @@ async function loadAll() {
 
 // ── Training ──
 async function trainPro() {
-  if (!confirm('Train the pro ensemble (XGBoost + LightGBM + Random Forest) on S&P 500?\nTakes 30-60 minutes on first run.')) return;
+  const list = getWatch() || [];
+  if (list.length < 3) {
+    alert('Add at least 3 stocks to your watchlist first — the model needs data to learn from.');
+    return;
+  }
+  const mins = Math.max(2, Math.round(list.length * 0.4));
+  if (!confirm(`Train pro ensemble (XGBoost + LightGBM + Random Forest) on your ${list.length} watchlist stocks?\nEstimated time: ~${mins} minutes.`)) return;
   try {
-    await api('/api/pro/train', {method: 'POST'});
-    openOverlay('Training pro ensemble...');
+    await api('/api/pro/train', {
+      method: 'POST',
+      body:   JSON.stringify({tickers: list}),
+    });
+    openOverlay(`Training pro ensemble on ${list.length} stocks...`);
     pollTask();
   } catch(e) { alert('Failed: ' + e.message); }
 }

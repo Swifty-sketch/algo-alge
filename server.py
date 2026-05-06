@@ -667,7 +667,14 @@ def pro_train():
     if _task['running']:
         return jsonify({'error': 'Another job is running'}), 409
 
-    tickers = list(dict.fromkeys(STOCKS + get_sp500()))
+    data    = request.get_json(force=True, silent=True) or {}
+    tickers = [t.upper().strip() for t in (data.get('tickers') or []) if t and isinstance(t, str)]
+    tickers = list(dict.fromkeys(tickers))  # dedupe
+
+    if not tickers:
+        return jsonify({'error': 'Watchlist is empty. Add stocks first.'}), 400
+    if len(tickers) < 3:
+        return jsonify({'error': 'Need at least 3 stocks for the model to learn anything useful.'}), 400
 
     def _job():
         train_pro(tickers, forward_days=3, threshold=0.015)
