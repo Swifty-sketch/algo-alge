@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pro Dashboard - Marsel</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--card:#141414;--row:#1a1a1a;--border:#222;
+  --text:#f0f0f0;--muted:#666;--green:#22c55e;--red:#ef4444;
+  --amber:#f59e0b;--blue:#3b82f6;--purple:#a855f7;--gold:#eab308;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh}
+
+/* ── Login screen ── */
+#login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}
+.lock-icon{font-size:2.5rem;margin-bottom:1rem}
+.login-title{font-size:1.6rem;font-weight:700;letter-spacing:-.03em;margin-bottom:.4rem}
+.login-sub{color:var(--muted);font-size:.85rem;margin-bottom:2rem;max-width:400px;line-height:1.6}
+.login-form{display:flex;flex-direction:column;gap:.6rem;width:100%;max-width:300px}
+.login-input{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem 1rem;font-size:.92rem;color:var(--text);font-family:inherit}
+.login-input:focus{outline:none;border-color:#444}
+.login-btn{background:var(--gold);color:#000;border:none;border-radius:10px;padding:.7rem;font-size:.9rem;font-weight:700;font-family:inherit;cursor:pointer;letter-spacing:.02em}
+.login-btn:hover{opacity:.9}
+.login-err{color:var(--red);font-size:.78rem;margin-top:.5rem;min-height:1em}
+
+/* ── App ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:.85rem 1.6rem;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:20;flex-wrap:wrap;gap:.75rem}
+.h-brand{font-size:.66rem;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--gold)}
+.h-sub{font-size:.66rem;color:var(--muted);margin-left:.4rem;letter-spacing:.06em}
+.h-right{display:flex;gap:.5rem;align-items:center}
+.btn{padding:.42rem .95rem;border-radius:8px;border:1px solid var(--border);font-size:.74rem;font-weight:600;font-family:inherit;cursor:pointer;background:none;color:var(--text);transition:opacity .15s,border-color .15s}
+.btn:hover{border-color:#555}
+.btn-primary{background:var(--gold);color:#000;border-color:var(--gold)}
+.btn-primary:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.pill{font-size:.66rem;padding:.22rem .6rem;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+.pill.running{color:var(--amber);border-color:var(--amber)}
+.pill.done{color:var(--green);border-color:var(--green)}
+
+main{max-width:1200px;margin:0 auto;padding:1.5rem;width:100%}
+
+.intro{background:linear-gradient(135deg,rgba(234,179,8,.08),rgba(168,85,247,.05));border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.4rem;margin-bottom:1.5rem}
+.intro h2{font-size:1rem;font-weight:700;margin-bottom:.4rem}
+.intro p{font-size:.78rem;color:var(--muted);line-height:1.7}
+
+.add-row{display:flex;gap:.5rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap}
+.tk-input{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.42rem .85rem;font-size:.82rem;color:var(--text);font-family:inherit;width:200px}
+.tk-input:focus{outline:none;border-color:#555}
+
+.sec-label{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.8rem;margin-top:1.5rem}
+
+/* ── Pro stock card ── */
+.stocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:1rem}
+.pcard{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;transition:border-color .15s}
+.pcard:hover{border-color:#333}
+.pcard.bull{border-left:3px solid var(--green)}
+.pcard.bear{border-left:3px solid var(--red)}
+.pcard.wait{border-left:3px solid var(--amber)}
+.pcard.hold{border-left:3px solid #444}
+.pcard.loading{opacity:.5}
+
+.pc-head{padding:1rem 1.2rem;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border)}
+.pc-tk{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}
+.pc-px{font-size:.78rem;color:var(--muted);margin-top:.15rem}
+.pc-px .pos{color:var(--green);font-weight:600}
+.pc-px .neg{color:var(--red);font-weight:600}
+.pc-label{font-size:.62rem;font-weight:800;letter-spacing:.1em;padding:.3rem .65rem;border-radius:6px}
+.pc-label.bull{background:rgba(34,197,94,.18);color:var(--green)}
+.pc-label.bear{background:rgba(239,68,68,.18);color:var(--red)}
+.pc-label.wait{background:rgba(245,158,11,.15);color:var(--amber)}
+.pc-label.hold{background:rgba(100,100,100,.18);color:var(--muted)}
+.pc-remove{position:absolute;top:.55rem;right:.55rem;background:none;border:none;color:var(--muted);font-size:.95rem;cursor:pointer;padding:0;line-height:1;z-index:5}
+.pc-remove:hover{color:var(--red)}
+
+.pc-section{padding:.85rem 1.2rem;border-bottom:1px solid var(--border)}
+.pc-section:last-child{border-bottom:none}
+.pc-stitle{font-size:.55rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.55rem}
+
+.ensemble-bar{height:8px;background:var(--row);border-radius:4px;overflow:hidden;margin-bottom:.5rem;position:relative}
+.ensemble-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--green));border-radius:4px;transition:width .4s}
+.ensemble-fill.bear{background:var(--red)}
+.ensemble-pct{display:flex;justify-content:space-between;align-items:baseline}
+.ensemble-pct .val{font-size:1.4rem;font-weight:700;letter-spacing:-.03em}
+.ensemble-pct .agr{font-size:.62rem;font-weight:700;letter-spacing:.08em;padding:.16rem .45rem;border-radius:5px}
+.agr-STRONG{background:rgba(34,197,94,.2);color:var(--green)}
+.agr-MODERATE{background:rgba(234,179,8,.18);color:var(--gold)}
+.agr-WEAK{background:rgba(245,158,11,.15);color:var(--amber)}
+.agr-NONE{background:rgba(100,100,100,.15);color:var(--muted)}
+
+.models{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:.6rem}
+.mdl{background:var(--row);border-radius:6px;padding:.45rem .55rem;text-align:center}
+.mdl-name{font-size:.55rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.2rem}
+.mdl-val{font-size:.85rem;font-weight:700}
+.mdl-val.up{color:var(--green)}.mdl-val.dn{color:var(--red)}.mdl-val.mid{color:var(--amber)}
+
+.tf-row{display:flex;align-items:center;gap:.5rem;font-size:.74rem;color:var(--muted);margin-top:.6rem}
+.tf-tag{font-weight:700;padding:.1rem .42rem;border-radius:4px;font-size:.6rem;letter-spacing:.06em}
+.tf-yes{background:rgba(34,197,94,.18);color:var(--green)}
+.tf-no{background:rgba(239,68,68,.15);color:var(--red)}
+.tf-na{background:var(--row);color:var(--muted)}
+
+.risk-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.4rem}
+.risk-cell{background:var(--row);border-radius:6px;padding:.55rem .7rem}
+.rc-l{font-size:.55rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.18rem}
+.rc-v{font-size:.88rem;font-weight:600}
+.rc-v.green{color:var(--green)}.rc-v.red{color:var(--red)}.rc-v.gold{color:var(--gold)}
+
+.empty{text-align:center;padding:3rem;color:var(--muted);font-size:.85rem}
+
+/* loader */
+.loader{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2rem;gap:1.2rem}
+.lring{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltext{font-size:.78rem;color:var(--muted);text-align:center;line-height:1.6}
+.ltext strong{color:var(--text);display:block;margin-bottom:.25rem;font-size:.85rem}
+
+/* train overlay */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(6px)}
+.overlay.show{display:flex}
+.ov-card{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:680px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.ov-hdr{padding:1rem 1.2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.75rem}
+.ov-spin{width:14px;height:14px;border:2.5px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite}
+.ov-spin.done{border-top-color:var(--green);animation:none}
+.ov-title{font-size:.88rem;font-weight:600;flex:1}
+.ov-status{font-size:.7rem;color:var(--muted)}
+.ov-log{flex:1;overflow-y:auto;padding:.75rem 1rem;font-family:'Consolas','SF Mono',monospace;font-size:.7rem;line-height:1.65;color:#888;background:#070707}
+.ov-log .ok{color:var(--green)}.ov-log .head{color:var(--text);font-weight:600}
+.ov-foot{padding:.75rem 1.2rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login">
+  <div class="lock-icon">🔒</div>
+  <h1 class="login-title">Pro Dashboard</h1>
+  <p class="login-sub">Private. Ensemble model + risk management. Enter password to access.</p>
+  <form class="login-form" onsubmit="event.preventDefault(); doLogin()">
+    <input class="login-input" id="pw-input" type="password" placeholder="Password" autocomplete="off">
+    <button class="login-btn" type="submit">Unlock</button>
+    <p class="login-err" id="login-err"></p>
+  </form>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+
+  <div class="overlay" id="overlay">
+    <div class="ov-card">
+      <div class="ov-hdr">
+        <div class="ov-spin" id="ov-spin"></div>
+        <span class="ov-title" id="ov-title">Training...</span>
+        <span class="ov-status" id="ov-status">Starting</span>
+      </div>
+      <div class="ov-log" id="ov-log"></div>
+      <div class="ov-foot"><button class="btn" id="ov-close" onclick="closeOverlay()" disabled>Close</button></div>
+    </div>
+  </div>
+
+  <header>
+    <div>
+      <span class="h-brand">PRO Dashboard</span>
+      <span class="h-sub">Ensemble model · Risk-managed</span>
+    </div>
+    <div class="h-right">
+      <span class="pill" id="task-pill">Idle</span>
+      <button class="btn" onclick="window.location.href='/'">← Main</button>
+      <button class="btn btn-primary" onclick="trainPro()">Train Pro Model</button>
+      <button class="btn" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="intro">
+      <h2>How this differs from the main dashboard</h2>
+      <p>Three models vote on every signal: <strong>XGBoost + LightGBM + Random Forest</strong>. Trained on 50+ technical indicators including ADX, Stochastic, MFI, OBV, multi-timeframe momentum, and 52-week distances. Daily and weekly trends must agree before BUY. Each pick comes with a recommended position size and ATR-based stop loss / take profit.</p>
+    </div>
+
+    <p class="sec-label">Add a stock</p>
+    <div class="add-row">
+      <input class="tk-input" id="tk-input" type="text" placeholder="Ticker (e.g. AAPL)"
+        onkeydown="if(event.key==='Enter')addTicker()" maxlength="10" autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary" onclick="addTicker()">Add</button>
+      <span style="font-size:.7rem;color:var(--muted);margin-left:.5rem">Saved in your browser</span>
+    </div>
+
+    <p class="sec-label">Watchlist</p>
+    <div class="stocks" id="stocks-grid"><div class="empty">Loading...</div></div>
+  </main>
+
+</div>
+
+<script>
+const TKEY = 'pro_token_v1';
+const WKEY = 'pro_watchlist_v1';
+
+function getToken() { return localStorage.getItem(TKEY); }
+function setToken(t) { localStorage.setItem(TKEY, t); }
+function clearToken() { localStorage.removeItem(TKEY); }
+
+function getWatch() { try { return JSON.parse(localStorage.getItem(WKEY)) || null; } catch { return null; } }
+function setWatch(arr) { localStorage.setItem(WKEY, JSON.stringify(arr)); }
+
+async function api(path, opts={}) {
+  const headers = {'Content-Type':'application/json'};
+  const tok = getToken();
+  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  const res = await fetch(path, {...opts, headers});
+  if (res.status === 401) { logout(); throw new Error('Session expired'); }
+  if (!res.ok) {
+    try { const j = await res.json(); throw new Error(j.error || res.statusText); }
+    catch(e) { if(e.message!==res.statusText) throw e; throw new Error(res.statusText); }
+  }
+  return res.json();
+}
+
+// ── Login ──
+async function doLogin() {
+  const pw  = document.getElementById('pw-input').value;
+  const err = document.getElementById('login-err');
+  err.textContent = '';
+  try {
+    const d = await fetch('/api/pro/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({password: pw}),
+    }).then(r => r.json());
+    if (d.error) throw new Error(d.error);
+    setToken(d.token);
+    if (!getWatch()) setWatch(d.defaults);
+    enterApp();
+  } catch(e) {
+    err.textContent = e.message || 'Login failed';
+  }
+}
+
+function logout() {
+  clearToken();
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('pw-input').value = '';
+}
+
+async function enterApp() {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  try {
+    const c = await api('/api/pro/check');
+    if (!c.trained) {
+      document.getElementById('stocks-grid').innerHTML =
+        `<div class="empty"><strong style="color:var(--gold);font-size:1rem;display:block;margin-bottom:.5rem">Pro model not trained yet</strong>
+          Click <strong>Train Pro Model</strong> in the header to train the ensemble. Takes 30-60 minutes.</div>`;
+      return;
+    }
+    loadAll();
+    pollTask();
+  } catch(e) {
+    document.getElementById('stocks-grid').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+// ── Watchlist ──
+async function addTicker() {
+  const inp = document.getElementById('tk-input');
+  const t   = inp.value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+  if (!t) return;
+  inp.value = '';
+  const list = getWatch() || [];
+  if (list.includes(t)) return;
+  list.push(t);
+  setWatch(list);
+  insertCard(t, true);
+  await fetchSignal(t);
+}
+
+function removeTicker(t) {
+  setWatch((getWatch() || []).filter(x => x !== t));
+  const el = document.getElementById('p-' + t);
+  if (el) el.remove();
+}
+
+function insertCard(t, loading) {
+  const grid = document.getElementById('stocks-grid');
+  if (grid.querySelector('.empty')) grid.innerHTML = '';
+  const div = document.createElement('div');
+  div.id = 'p-' + t;
+  div.className = 'pcard hold loading';
+  div.innerHTML = `<button class="pc-remove" onclick="removeTicker('${t}')">×</button>
+    <div class="pc-head"><div><div class="pc-tk">${t}</div><div class="pc-px">Loading...</div></div></div>`;
+  grid.appendChild(div);
+}
+
+async function fetchSignal(t) {
+  const div = document.getElementById('p-' + t);
+  if (!div) return;
+  try {
+    const d = await api('/api/pro/signal/' + encodeURIComponent(t));
+    renderCard(div, d);
+  } catch(e) {
+    div.className = 'pcard hold';
+    div.innerHTML = `<button class="pc-remove" onclick="removeTicker('${t}')">×</button>
+      <div class="pc-head"><div><div class="pc-tk">${t}</div>
+      <div style="font-size:.7rem;color:var(--red);margin-top:.3rem;line-height:1.4">${e.message}</div></div></div>`;
+  }
+}
+
+function renderCard(div, d) {
+  const cls = d.label === 'BUY'  ? 'bull' :
+              d.label === 'SELL' ? 'bear' :
+              d.label === 'WAIT' ? 'wait' : 'hold';
+  const pct  = Math.round(d.ensemble_signal * 100);
+  const cc   = d.change_1d >= 0 ? 'pos' : 'neg';
+  const sign = d.change_1d >= 0 ? '+' : '';
+  const wf   = d.weekly_confirms === true  ? '<span class="tf-tag tf-yes">YES</span>' :
+               d.weekly_confirms === false ? '<span class="tf-tag tf-no">NO</span>' :
+                                              '<span class="tf-tag tf-na">N/A</span>';
+  function mdlCls(p) { return p >= 0.55 ? 'up' : p <= 0.45 ? 'dn' : 'mid'; }
+  const ind = d.individual || {};
+  const mdlHTML = ['xgb','rf','lgb'].filter(k => ind[k] != null).map(k => {
+    const lbl = {xgb:'XGBoost',rf:'Random Forest',lgb:'LightGBM'}[k];
+    const v   = Math.round(ind[k] * 100);
+    return `<div class="mdl"><div class="mdl-name">${lbl}</div>
+      <div class="mdl-val ${mdlCls(ind[k])}">${v}%</div></div>`;
+  }).join('');
+
+  div.className = 'pcard ' + cls;
+  div.innerHTML = `
+    <button class="pc-remove" onclick="removeTicker('${d.ticker}')">×</button>
+    <div class="pc-head">
+      <div>
+        <div class="pc-tk">${d.ticker}</div>
+        <div class="pc-px">$${d.price} · <span class="${cc}">${sign}${d.change_1d}% today</span></div>
+      </div>
+      <span class="pc-label ${cls}">${d.label}</span>
+    </div>
+
+    <div class="pc-section">
+      <p class="pc-stitle">Ensemble signal · ${d.model_count} models</p>
+      <div class="ensemble-pct">
+        <span class="val">${pct}%</span>
+        <span class="agr agr-${d.agreement}">${d.agreement} AGREEMENT</span>
+      </div>
+      <div class="ensemble-bar"><div class="ensemble-fill ${pct<50?'bear':''}" style="width:${pct}%"></div></div>
+      <div class="models">${mdlHTML}</div>
+      <div class="tf-row">Weekly trend agrees: ${wf}</div>
+    </div>
+
+    <div class="pc-section">
+      <p class="pc-stitle">Risk plan</p>
+      <div class="risk-grid">
+        <div class="risk-cell"><div class="rc-l">Position size</div><div class="rc-v gold">${d.position_size_pct}% of capital</div></div>
+        <div class="risk-cell"><div class="rc-l">Risk / reward</div><div class="rc-v">${d.risk_reward}:1</div></div>
+        <div class="risk-cell"><div class="rc-l">Stop loss</div><div class="rc-v red">$${d.stop_loss}</div></div>
+        <div class="risk-cell"><div class="rc-l">Take profit</div><div class="rc-v green">$${d.take_profit}</div></div>
+      </div>
+    </div>`;
+}
+
+async function loadAll() {
+  const list = getWatch() || [];
+  const grid = document.getElementById('stocks-grid');
+  grid.innerHTML = '';
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty">Watchlist empty. Add a ticker above.</div>';
+    return;
+  }
+  for (const t of list) insertCard(t, true);
+  await Promise.all(list.map(fetchSignal));
+}
+
+// ── Training ──
+async function trainPro() {
+  if (!confirm('Train the pro ensemble (XGBoost + LightGBM + Random Forest) on S&P 500?\nTakes 30-60 minutes on first run.')) return;
+  try {
+    await api('/api/pro/train', {method: 'POST'});
+    openOverlay('Training pro ensemble...');
+    pollTask();
+  } catch(e) { alert('Failed: ' + e.message); }
+}
+
+let logOffset = 0, taskTimer = null;
+
+function openOverlay(title) {
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('ov-title').textContent = title;
+  document.getElementById('ov-log').innerHTML = '';
+  document.getElementById('ov-close').disabled = true;
+  document.getElementById('ov-spin').classList.remove('done');
+  logOffset = 0;
+}
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); }
+
+async function pollTask() {
+  if (taskTimer) clearInterval(taskTimer);
+  taskTimer = setInterval(async () => {
+    try {
+      const t = await fetch('/api/task-status').then(r => r.json());
+      const pill = document.getElementById('task-pill');
+      pill.textContent = t.running ? (t.label || 'Working') : (t.last || 'Idle');
+      pill.className = 'pill ' + (t.running ? 'running' : (t.error ? '' : 'done'));
+
+      if (document.getElementById('overlay').classList.contains('show')) {
+        const log = await fetch('/api/log?offset=' + logOffset).then(r => r.json());
+        if (log.lines && log.lines.length) {
+          const ovlog = document.getElementById('ov-log');
+          for (const line of log.lines) {
+            const div = document.createElement('div');
+            const cls = line.includes('===') ? 'head' : (line.includes('OK') || line.includes('saved') || line.includes('DONE')) ? 'ok' : '';
+            if (cls) div.className = cls;
+            div.textContent = line;
+            ovlog.appendChild(div);
+          }
+          ovlog.scrollTop = ovlog.scrollHeight;
+          logOffset = log.offset;
+        }
+        document.getElementById('ov-status').textContent = t.running ? (t.label || 'Working') : 'Done';
+        if (!t.running) {
+          document.getElementById('ov-spin').classList.add('done');
+          document.getElementById('ov-close').disabled = false;
+          document.getElementById('ov-close').onclick = () => { closeOverlay(); loadAll(); };
+        }
+      }
+    } catch {}
+  }, 700);
+}
+
+// ── Boot ──
+if (getToken()) {
+  enterApp();
+} else {
+  document.getElementById('pw-input').focus();
+}
+</script>
+</body>
+</html>

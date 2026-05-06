@@ -1,4 +1,5 @@
-import os, sys, threading
+import os, sys, threading, secrets
+from functools import wraps
 import numpy as np
 from datetime import datetime
 
@@ -13,9 +14,11 @@ from config import (STOCKS, PERIOD, INTERVAL, FORWARD_DAYS, THRESHOLD,
                     ENTER_THRESH, EXIT_THRESH)
 from src.fetch_data import fetch
 from src.features import add_features
+from src.features_pro import add_pro_features
 from src.train import train_all, load_model
 from src.backtest import run_all
 from src.scanner import train_universal, scan, load_universal, SWING_CFG, LONGTERM_CFG
+from src.ensemble import train_pro, predict_pro, load_pro_models, load_feature_cols
 from src.universe import get_sp100, get_sp500, get_all_listed, get_reddit_tickers
 
 app = Flask(__name__)
@@ -611,6 +614,172 @@ def api_buy_now():
     return jsonify(results[:8])
 
 
+# ── Pro page (password gated) ──────────────────────────────────────────────────
+
+PRO_PASSWORD = os.environ.get('PRO_PASSWORD', 'Marsel-Pro-2026')
+_pro_tokens  = set()
+
+
+def require_pro(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '').strip()
+        if not token or token not in _pro_tokens:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+# Curated pro watchlist - high-liquidity quality names
+PRO_DEFAULTS = [
+    'AAPL', 'MSFT', 'NVDA', 'GOOGL', 'META',
+    'TSLA', 'AMZN', 'JPM', 'LLY', 'UNH',
+    'V', 'COST', 'XOM', 'AVGO', 'NFLX',
+    'VOLV-B.ST', 'ERIC-B.ST', 'INVE-B.ST',
+]
+
+
+@app.route('/pro')
+def serve_pro():
+    return send_file(os.path.join(os.path.dirname(__file__), 'pro.html'))
+
+
+@app.route('/api/pro/login', methods=['POST'])
+def pro_login():
+    data = request.get_json(force=True, silent=True) or {}
+    if data.get('password') == PRO_PASSWORD:
+        token = secrets.token_urlsafe(24)
+        _pro_tokens.add(token)
+        return jsonify({'token': token, 'defaults': PRO_DEFAULTS})
+    return jsonify({'error': 'Wrong password'}), 401
+
+
+@app.route('/api/pro/check', methods=['GET'])
+@require_pro
+def pro_check():
+    has_models = len(load_pro_models()) > 0
+    return jsonify({'ok': True, 'trained': has_models, 'defaults': PRO_DEFAULTS})
+
+
+@app.route('/api/pro/train', methods=['POST'])
+@require_pro
+def pro_train():
+    if _task['running']:
+        return jsonify({'error': 'Another job is running'}), 409
+
+    tickers = list(dict.fromkeys(STOCKS + get_sp500()))
+
+    def _job():
+        train_pro(tickers, forward_days=3, threshold=0.015)
+
+    threading.Thread(target=_run_task, args=(_job,), daemon=True).start()
+    return jsonify({'ok': True, 'count': len(tickers)})
+
+
+@app.route('/api/pro/signal/<ticker>')
+@require_pro
+def pro_signal(ticker):
+    ticker = ticker.upper().strip()
+    try:
+        feature_cols = load_feature_cols()
+        if not feature_cols:
+            return jsonify({'error': 'Pro models not trained yet. Click Train Pro Model.'}), 503
+
+        df = fetch(ticker, period='5y', interval='1d', use_cache=True)
+        if df is None or len(df) < 300:
+            return jsonify({'error': f'Not enough history for {ticker}'}), 404
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        feat = add_pro_features(df)
+        # align to training feature set
+        for c in feature_cols:
+            if c not in feat.columns:
+                feat[c] = np.nan
+        X = feat[feature_cols].replace([np.inf, -np.inf], np.nan).dropna()
+        if X.empty:
+            return jsonify({'error': 'Could not compute pro features (insufficient data)'}), 404
+
+        # Multi-timeframe: also score the weekly trend
+        weekly_confirms = None
+        try:
+            weekly = df.resample('W').agg({'Open':'first','High':'max','Low':'min',
+                                            'Close':'last','Volume':'sum'}).dropna()
+            if len(weekly) >= 60:
+                wfeat = add_pro_features(weekly)
+                for c in feature_cols:
+                    if c not in wfeat.columns:
+                        wfeat[c] = np.nan
+                wX = wfeat[feature_cols].replace([np.inf, -np.inf], np.nan).dropna()
+                if not wX.empty:
+                    wpred = predict_pro(wX.iloc[[-1]])
+                    weekly_confirms = bool(wpred and wpred['ensemble'] >= 0.55)
+        except Exception as e:
+            print(f'[pro_signal] weekly check failed for {ticker}: {e}')
+
+        result = predict_pro(X.iloc[[-1]])
+        if not result:
+            return jsonify({'error': 'No models loaded'}), 503
+
+        prob = result['ensemble']
+
+        # Position sizing: scale by confidence, cap at 20% of capital
+        MAX_POS_PCT = 20.0
+        if prob >= 0.70:
+            position_size_pct = round(min(prob * MAX_POS_PCT, MAX_POS_PCT), 1)
+            label = 'BUY'
+        elif prob <= 0.40:
+            position_size_pct = 0.0
+            label = 'SELL'
+        else:
+            position_size_pct = 0.0
+            label = 'HOLD'
+
+        # ATR-based stops (1.5x ATR stop, 2.5x ATR target)
+        close = df['Close'].squeeze()
+        price = float(close.iloc[-1])
+        try:
+            tr = pd.concat([df['High'] - df['Low'],
+                            (df['High'] - close.shift()).abs(),
+                            (df['Low']  - close.shift()).abs()], axis=1).max(axis=1)
+            atr = float(tr.rolling(14).mean().iloc[-1])
+        except Exception:
+            atr = price * 0.02
+
+        stop_loss   = round(price - 1.5 * atr, 2)
+        take_profit = round(price + 2.5 * atr, 2)
+        rr_ratio    = round((take_profit - price) / max(price - stop_loss, 0.01), 2)
+
+        # Multi-timeframe filter: downgrade if weekly disagrees
+        if weekly_confirms is False and label == 'BUY':
+            label = 'WAIT'
+            position_size_pct = round(position_size_pct / 2, 1)
+
+        change_1d = close.pct_change().iloc[-1] * 100
+        change_1d = round(float(change_1d), 2) if np.isfinite(change_1d) else 0.0
+
+        return jsonify({
+            'ticker':            ticker,
+            'price':             round(price, 2),
+            'change_1d':         change_1d,
+            'ensemble_signal':   prob,
+            'individual':        result['individual'],
+            'agreement':         result['agreement'],
+            'model_count':       result['model_count'],
+            'weekly_confirms':   weekly_confirms,
+            'label':             label,
+            'position_size_pct': position_size_pct,
+            'stop_loss':         stop_loss,
+            'take_profit':       take_profit,
+            'risk_reward':       rr_ratio,
+            'atr':               round(atr, 2),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     print('Dashboard running at http://localhost:8080')
+    print(f'Pro page: http://localhost:8080/pro  (password: {PRO_PASSWORD})')
     app.run(host='0.0.0.0', port=8080, debug=False)
