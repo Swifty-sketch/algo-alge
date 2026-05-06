@@ -186,7 +186,7 @@ tr:hover td{background:var(--row);cursor:pointer}
 
   <div class="land-links">
     <span class="land-link" onclick="enterApp()">Swedish stocks</span>
-    <span class="land-link" onclick="enterApp()">S&P 100 scanner</span>
+    <span class="land-link" onclick="enterApp()">S&P 500 scanner</span>
     <span class="land-link" onclick="enterApp()">Penny finder</span>
     <span class="land-link" onclick="enterApp()">Reddit tracker</span>
   </div>
@@ -289,7 +289,7 @@ tr:hover td{background:var(--row);cursor:pointer}
     <div class="scan-hdr">
       <div>
         <p class="sec-label">Swing trades — 3-day forecast</p>
-        <p style="font-size:.75rem;color:var(--muted)">Model confidence for 1.5%+ gain in 3 days. S&P 100 + Reddit picks.</p>
+        <p style="font-size:.75rem;color:var(--muted)">Model confidence for 1.5%+ gain in 3 days. S&P 500 + Reddit picks.</p>
       </div>
       <button class="btn btn-ghost" onclick="loadScan('swing')">Refresh</button>
     </div>
@@ -569,7 +569,7 @@ async function loadScan(type) {
     const st = await apiFetch('/api/universal-status');
     if (!(type==='swing'?st.swing:st.longterm)) {
       el.innerHTML = `<div class="train-prompt"><strong>No ${type} model trained yet</strong>
-        Click "Train US Models" to train on S&P 100 stocks (~10-15 min).
+        Click "Train US Models" to train on S&P 500 stocks (~10-15 min).
         <br><br><button class="btn btn-primary" onclick="triggerTrainUS()">Train US Models</button></div>`; return;
     }
     const d = await apiFetch(`/api/scan/${type}`);
@@ -639,7 +639,7 @@ async function loadReddit() {
 
 // ── Task / Overlay ─────────────────────────────────────────────────────────────
 async function triggerTrain()   { if(!confirm('Train SE stock models?'))return; await apiFetch('/api/train','POST'); openOverlay('Training Swedish stock models...'); startPolling(); }
-async function triggerTrainUS() { if(!confirm('Train Swing + Long Term models on S&P 100?\nExpect 10-20 minutes.'))return; await apiFetch('/api/train-universal','POST'); openOverlay('Training US market models (S&P 100)...'); startPolling(); }
+async function triggerTrainUS() { if(!confirm('Train Swing + Long Term models on S&P 500 (~500 stocks).\nExpect 30-60 minutes on first run.'))return; await apiFetch('/api/train-universal','POST'); openOverlay('Training US market models (S&P 500)...'); startPolling(); }
 async function triggerBacktest(){ await apiFetch('/api/backtest','POST'); openOverlay('Running backtest...'); startPolling(); }
 
 function openOverlay(title) {

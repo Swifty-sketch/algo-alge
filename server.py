@@ -16,7 +16,7 @@ from src.features import add_features
 from src.train import train_all, load_model
 from src.backtest import run_all
 from src.scanner import train_universal, scan, load_universal, SWING_CFG, LONGTERM_CFG
-from src.universe import get_sp100, get_reddit_tickers
+from src.universe import get_sp100, get_sp500, get_reddit_tickers
 
 app = Flask(__name__)
 CORS(app)
@@ -203,7 +203,7 @@ def trigger_backtest():
 def trigger_train_universal():
     if _task['running']:
         return jsonify({'error': 'Already running'}), 409
-    tickers = get_sp100()
+    tickers = get_sp500()
 
     def _train_both():
         train_universal(tickers, 'swing',    **SWING_CFG)
@@ -218,7 +218,7 @@ def api_scan(model_type):
     if model_type not in ('swing', 'longterm'):
         return jsonify({'error': 'Unknown model type'}), 400
 
-    sp100 = get_sp100()
+    sp500 = get_sp500()
 
     # add validated reddit tickers to the pool
     reddit_raw = []
@@ -228,7 +228,7 @@ def api_scan(model_type):
         print(f'[reddit] fetch error: {e}')
 
     reddit_tickers = [t for t, _ in reddit_raw]
-    all_tickers    = list(dict.fromkeys(sp100 + reddit_tickers))  # dedupe, preserve order
+    all_tickers    = list(dict.fromkeys(sp500 + reddit_tickers))  # dedupe, preserve order
 
     results = scan(all_tickers, model_type)
 
@@ -485,7 +485,7 @@ def _get_news(ticker):
 @app.route('/api/buy-now')
 def api_buy_now():
     swing_model = load_universal('swing')
-    all_tickers = list(dict.fromkeys(STOCKS + get_sp100()))
+    all_tickers = list(dict.fromkeys(STOCKS + get_sp500()))
     candidates  = []
 
     for ticker in all_tickers:

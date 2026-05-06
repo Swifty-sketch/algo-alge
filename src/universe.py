@@ -1,5 +1,6 @@
 import re
 import requests
+import pandas as pd
 
 # S&P 100 — top US stocks by market cap
 SP100 = [
@@ -31,6 +32,17 @@ _TICKER_RE = re.compile(r'(?<!\w)\$?([A-Z]{2,5})(?!\w)')
 
 def get_sp100():
     return list(SP100)
+
+
+def get_sp500():
+    """Fetch the full S&P 500 ticker list from Wikipedia. Falls back to SP100."""
+    try:
+        tables  = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+        tickers = tables[0]['Symbol'].str.replace('.', '-', regex=False).tolist()
+        return [t for t in tickers if t and isinstance(t, str)]
+    except Exception as e:
+        print(f'[universe] S&P 500 fetch failed ({e}), using SP100 fallback')
+        return list(SP100)
 
 
 def get_reddit_tickers(limit=30):
