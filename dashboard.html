@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Trading Dashboard</title>
+<title>Marsel's Trading Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -15,19 +15,18 @@
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh}
 
 /* ── Landing ── */
-#landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}
-.land-brand{font-size:.65rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:2rem}
-.land-title{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;letter-spacing:-.04em;line-height:1.1;margin-bottom:1rem}
-.land-title span{color:var(--green)}
-.land-sub{font-size:1rem;color:var(--muted);max-width:520px;line-height:1.7;margin-bottom:2.5rem}
-.land-features{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;max-width:860px;width:100%;margin-bottom:2.5rem}
-.land-feat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.25rem;text-align:left}
-.lf-icon{font-size:1.4rem;margin-bottom:.5rem}
-.lf-title{font-size:.82rem;font-weight:600;margin-bottom:.3rem}
-.lf-desc{font-size:.75rem;color:var(--muted);line-height:1.5}
-.land-cta{display:inline-block;background:var(--green);color:#000;border:none;border-radius:12px;padding:.85rem 2.2rem;font-size:.95rem;font-weight:700;font-family:inherit;cursor:pointer;transition:opacity .15s;letter-spacing:-.01em}
-.land-cta:hover{opacity:.88}
-.land-note{margin-top:1.25rem;font-size:.72rem;color:var(--muted)}
+#landing{min-height:100vh;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:3rem clamp(1.5rem,8vw,6rem);max-width:680px}
+.land-hello{font-size:.75rem;color:var(--muted);margin-bottom:1.2rem;letter-spacing:.04em}
+.land-name{font-size:clamp(2.2rem,6vw,4rem);font-weight:700;letter-spacing:-.05em;line-height:1;margin-bottom:.4rem}
+.land-name span{color:var(--green)}
+.land-role{font-size:1.05rem;color:var(--muted);font-weight:400;margin-bottom:1.8rem}
+.land-desc{font-size:.9rem;color:#555;line-height:1.75;margin-bottom:2.2rem;max-width:460px}
+.land-links{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:3rem}
+.land-link{font-size:.78rem;color:var(--muted);text-decoration:none;border-bottom:1px solid var(--border);padding-bottom:1px;transition:color .15s,border-color .15s;cursor:pointer}
+.land-link:hover{color:var(--text);border-color:#555}
+.land-cta{display:inline-block;background:var(--text);color:var(--bg);border:none;border-radius:8px;padding:.7rem 1.6rem;font-size:.85rem;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s}
+.land-cta:hover{opacity:.85}
+.land-date{margin-top:auto;padding-top:3rem;font-size:.7rem;color:#333;letter-spacing:.04em}
 
 /* ── App (hidden until Enter) ── */
 #app{display:none;flex-direction:column;min-height:100vh}
@@ -165,34 +164,21 @@ tr:hover td{background:var(--row);cursor:pointer}
 
 <!-- ── Landing Page ── -->
 <div id="landing">
-  <p class="land-brand">Personal Trading Tool</p>
-  <h1 class="land-title">My trading<br><span>dashboard</span></h1>
-  <p class="land-sub">XGBoost model predictions, Reddit scanning, and backtest results for my watchlist.</p>
+  <p class="land-hello">hi, i'm</p>
+  <h1 class="land-name">Marsel<span>.</span></h1>
+  <p class="land-role">This is my personal trading dashboard.</p>
+  <p class="land-desc">I built this to track my own stock watchlist. It runs ML models on price data, scans Reddit for hype, and backtests strategies. Not a product — just a tool I use.</p>
 
-  <div class="land-features">
-    <div class="land-feat">
-      <div class="lf-icon">📈</div>
-      <div class="lf-title">Buy Probability</div>
-      <div class="lf-desc">XGBoost trained on 5 years of price data. Swing (3-day) and long-term (1-year) forecasts.</div>
-    </div>
-    <div class="land-feat">
-      <div class="lf-icon">🔍</div>
-      <div class="lf-title">Penny Stock Finder</div>
-      <div class="lf-desc">Scrapes Reddit for trending cheap stocks. Shows metrics, what people are saying, and a verdict.</div>
-    </div>
-    <div class="land-feat">
-      <div class="lf-icon">🌐</div>
-      <div class="lf-title">S&P 100 Scanner</div>
-      <div class="lf-desc">Ranks all S&P 100 stocks by model confidence. Run on demand.</div>
-    </div>
-    <div class="land-feat">
-      <div class="lf-icon">💬</div>
-      <div class="lf-title">Reddit</div>
-      <div class="lf-desc">Shows which tickers are being mentioned most across r/wallstreetbets, r/stocks and others.</div>
-    </div>
+  <div class="land-links">
+    <span class="land-link" onclick="enterApp()">Swedish stocks</span>
+    <span class="land-link" onclick="enterApp()">S&P 100 scanner</span>
+    <span class="land-link" onclick="enterApp()">Penny finder</span>
+    <span class="land-link" onclick="enterApp()">Reddit tracker</span>
   </div>
 
-  <button class="land-cta" onclick="enterApp()">Open</button>
+  <button class="land-cta" onclick="enterApp()">Open dashboard</button>
+
+  <p class="land-date" id="land-date"></p>
 </div>
 
 <!-- ── App ── -->
@@ -215,7 +201,7 @@ tr:hover td{background:var(--row);cursor:pointer}
   </div>
 
   <header>
-    <span class="h-brand" onclick="goHome()">AI Trading Dashboard</span>
+    <span class="h-brand" onclick="goHome()">Marsel's Dashboard</span>
     <div class="h-right">
       <span class="pill" id="task-pill">Idle</span>
       <button class="btn btn-ghost" id="btn-backtest" onclick="triggerBacktest()">Backtest SE</button>
@@ -310,6 +296,7 @@ tr:hover td{background:var(--row);cursor:pointer}
 
 <script>
 const API = '';
+document.getElementById('land-date').textContent = new Date().toLocaleDateString('en-SE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 let chartInstance = null, taskPoller = null, logPoller = null;
 let logOffset = 0, activeTab = 'my';
 
