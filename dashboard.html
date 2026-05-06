@@ -165,35 +165,34 @@ tr:hover td{background:var(--row);cursor:pointer}
 
 <!-- ── Landing Page ── -->
 <div id="landing">
-  <p class="land-brand">AI Trading Dashboard</p>
-  <h1 class="land-title">Find your next<br><span>winning trade</span></h1>
-  <p class="land-sub">Machine learning signals, penny stock hype detection, Reddit sentiment, and backtested strategies — all in one place.</p>
+  <p class="land-brand">Personal Trading Tool</p>
+  <h1 class="land-title">My trading<br><span>dashboard</span></h1>
+  <p class="land-sub">XGBoost model predictions, Reddit scanning, and backtest results for my watchlist.</p>
 
   <div class="land-features">
     <div class="land-feat">
       <div class="lf-icon">📈</div>
-      <div class="lf-title">ML Signals</div>
-      <div class="lf-desc">XGBoost models trained on 5 years of price data. Swing (3-day) and long-term (1-year) forecasts.</div>
+      <div class="lf-title">Buy Probability</div>
+      <div class="lf-desc">XGBoost trained on 5 years of price data. Swing (3-day) and long-term (1-year) forecasts.</div>
     </div>
     <div class="land-feat">
-      <div class="lf-icon">🔥</div>
-      <div class="lf-title">Penny & Hype Finder</div>
-      <div class="lf-desc">Scans Reddit for trending penny stocks. Full analysis: metrics, sentiment, company summary, buy rating.</div>
+      <div class="lf-icon">🔍</div>
+      <div class="lf-title">Penny Stock Finder</div>
+      <div class="lf-desc">Scrapes Reddit for trending cheap stocks. Shows metrics, what people are saying, and a verdict.</div>
     </div>
     <div class="land-feat">
       <div class="lf-icon">🌐</div>
       <div class="lf-title">S&P 100 Scanner</div>
-      <div class="lf-desc">Scans all major US stocks and ranks them by ML signal strength. Refreshes on demand.</div>
+      <div class="lf-desc">Ranks all S&P 100 stocks by model confidence. Run on demand.</div>
     </div>
     <div class="land-feat">
       <div class="lf-icon">💬</div>
-      <div class="lf-title">Reddit Tracker</div>
-      <div class="lf-desc">Live scrape of r/wallstreetbets, r/stocks, r/investing and more to surface what traders are discussing.</div>
+      <div class="lf-title">Reddit</div>
+      <div class="lf-desc">Shows which tickers are being mentioned most across r/wallstreetbets, r/stocks and others.</div>
     </div>
   </div>
 
-  <button class="land-cta" onclick="enterApp()">Open Dashboard</button>
-  <p class="land-note">Runs locally — your data never leaves your machine.</p>
+  <button class="land-cta" onclick="enterApp()">Open</button>
 </div>
 
 <!-- ── App ── -->
@@ -235,14 +234,14 @@ tr:hover td{background:var(--row);cursor:pointer}
 
   <!-- My Stocks -->
   <div class="pane active" id="pane-my">
-    <p class="sec-label">Current ML signals — click a card to load chart</p>
+    <p class="sec-label">Buy probability — click a card to load chart</p>
     <div class="sig-grid" id="signals-grid"><div class="empty">Loading...</div></div>
     <div class="chart-box">
       <div class="chart-hdr">
         <span class="chart-tk" id="chart-ticker">Select a stock above</span>
         <div class="chart-leg">
           <span><span class="ldot" style="background:#3b82f6"></span>Price</span>
-          <span><span class="ldot" style="background:#22c55e"></span>ML signal</span>
+          <span><span class="ldot" style="background:#22c55e"></span>Buy probability</span>
           <span><span class="ldot" style="background:rgba(245,158,11,.4)"></span>Buy zone</span>
         </div>
       </div>
@@ -264,7 +263,7 @@ tr:hover td{background:var(--row);cursor:pointer}
     <div class="scan-hdr">
       <div>
         <p class="sec-label">Penny &amp; hype stock finder</p>
-        <p style="font-size:.75rem;color:var(--muted)">Scans Reddit for trending cheap stocks. Includes ML signal, metrics, sentiment and a buy/avoid verdict.</p>
+        <p style="font-size:.75rem;color:var(--muted)">Scrapes Reddit for trending cheap stocks. Shows metrics, sentiment and a verdict.</p>
       </div>
       <button class="btn btn-ghost" onclick="loadPenny()">Refresh</button>
     </div>
@@ -276,7 +275,7 @@ tr:hover td{background:var(--row);cursor:pointer}
     <div class="scan-hdr">
       <div>
         <p class="sec-label">Swing trades — 3-day forecast</p>
-        <p style="font-size:.75rem;color:var(--muted)">Probability of 1.5%+ gain in 3 days. S&P 100 + Reddit picks.</p>
+        <p style="font-size:.75rem;color:var(--muted)">Model confidence for 1.5%+ gain in 3 days. S&P 100 + Reddit picks.</p>
       </div>
       <button class="btn btn-ghost" onclick="loadScan('swing')">Refresh</button>
     </div>
