@@ -139,6 +139,21 @@ tr:hover td{background:var(--row);cursor:pointer}
 .signal-fill{height:100%;border-radius:3px;background:var(--green);transition:width .4s}
 .signal-fill.bear{background:var(--red)}
 
+/* ── Buy Now alerts ── */
+.bn-empty{text-align:center;padding:3rem;color:var(--muted);font-size:.85rem}
+.bn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem}
+.bn-card{background:var(--card);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:14px;padding:1.1rem 1.25rem;position:relative}
+.bn-badge{position:absolute;top:1rem;right:1rem;background:var(--green);color:#000;font-size:.6rem;font-weight:800;letter-spacing:.1em;padding:.22rem .55rem;border-radius:6px}
+.bn-ticker{font-size:1.3rem;font-weight:700;letter-spacing:-.03em;margin-bottom:.15rem}
+.bn-price{font-size:.8rem;color:var(--muted);margin-bottom:.9rem}
+.bn-reasons{display:flex;flex-direction:column;gap:.3rem;margin-bottom:.9rem}
+.bn-reason{font-size:.78rem;color:var(--green);display:flex;gap:.45rem;align-items:center}
+.bn-reason::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--green);flex-shrink:0}
+.bn-news-title{font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+.bn-headline{font-size:.73rem;color:#888;line-height:1.5;padding:.3rem .5rem;border-left:2px solid #2a2a2a;margin-bottom:.25rem}
+.bn-meta{display:flex;gap:1rem;margin-top:.9rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.bn-m{font-size:.7rem;color:var(--muted)}.bn-m span{color:var(--text);font-weight:600}
+
 /* overlay */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)}
 .overlay.show{display:flex}
@@ -211,15 +226,28 @@ tr:hover td{background:var(--row);cursor:pointer}
   </header>
 
   <div class="tabs">
-    <div class="tab active" id="tab-my"       onclick="showTab('my')">My Stocks (SE)</div>
+    <div class="tab active" id="tab-alerts"   onclick="showTab('alerts')">Buy Now <span class="tbadge hot" id="badge-alerts"></span></div>
+    <div class="tab"        id="tab-my"       onclick="showTab('my')">My Stocks (SE)</div>
     <div class="tab"        id="tab-penny"    onclick="showTab('penny')">Penny / Hype <span class="tbadge hot" id="badge-penny">NEW</span></div>
     <div class="tab"        id="tab-swing"    onclick="showTab('swing')">Swing Trades <span class="tbadge">3d</span></div>
     <div class="tab"        id="tab-longterm" onclick="showTab('longterm')">Long Term <span class="tbadge">1yr</span></div>
     <div class="tab"        id="tab-reddit"   onclick="showTab('reddit')">Reddit <span class="tbadge" id="badge-reddit"></span></div>
   </div>
 
+  <!-- Buy Now -->
+  <div class="pane" id="pane-alerts">
+    <div class="scan-hdr">
+      <div>
+        <p class="sec-label">Buy now alerts</p>
+        <p style="font-size:.75rem;color:var(--muted)">Stocks where the model, news, and volume all line up at the same time.</p>
+      </div>
+      <button class="btn btn-ghost" onclick="loadBuyNow()">Refresh</button>
+    </div>
+    <div id="alerts-content"><div class="empty">Loading...</div></div>
+  </div>
+
   <!-- My Stocks -->
-  <div class="pane active" id="pane-my">
+  <div class="pane" id="pane-my">
     <p class="sec-label">Buy probability — click a card to load chart</p>
     <div class="sig-grid" id="signals-grid"><div class="empty">Loading...</div></div>
     <div class="chart-box">
@@ -304,6 +332,7 @@ let logOffset = 0, activeTab = 'my';
 function enterApp() {
   document.getElementById('landing').style.display = 'none';
   document.getElementById('app').style.display     = 'flex';
+  showTab('alerts');
   refreshSignals();
   loadSummary();
   pollTask();
@@ -320,6 +349,7 @@ function showTab(name) {
   document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'alerts')   loadBuyNow();
   if (name === 'penny')    loadPenny();
   if (name === 'swing')    loadScan('swing');
   if (name === 'longterm') loadScan('longterm');
@@ -405,6 +435,46 @@ async function loadSummary() {
         <td class="neg">${dd.toFixed(1)}%</td><td>${wr.toFixed(1)}%</td><td>${r.trades}</td></tr>`;
     }).join('');
   } catch {}
+}
+
+// ── Buy Now ────────────────────────────────────────────────────────────────────
+async function loadBuyNow() {
+  const el = document.getElementById('alerts-content');
+  el.innerHTML = '<div class="empty">Scanning news + model signals... takes ~30 seconds.</div>';
+  try {
+    const data = await apiFetch('/api/buy-now');
+    const badge = document.getElementById('badge-alerts');
+    if (!data.length) {
+      badge.textContent = '';
+      el.innerHTML = '<div class="bn-empty">No strong buy signals right now.<br><span style="font-size:.75rem">All three factors (model, news, volume) need to align. Check back later or train the US swing model first.</span></div>';
+      return;
+    }
+    badge.textContent = data.length;
+    el.innerHTML = `<div class="bn-grid">${data.map(buyNowCard).join('')}</div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function buyNowCard(s) {
+  const sigPct = s.signal !== null ? Math.round(s.signal * 100) : null;
+  const mom    = s.mom3d !== null ? (s.mom3d >= 0 ? '+' : '') + s.mom3d + '%' : '—';
+  const news   = (s.headlines || []).slice(0, 3).map(h =>
+    `<div class="bn-headline">${h.length > 100 ? h.slice(0, 100) + '…' : h}</div>`).join('');
+  const reasons = (s.reasons || []).map(r => `<div class="bn-reason">${r}</div>`).join('');
+
+  return `<div class="bn-card">
+    <span class="bn-badge">BUY NOW</span>
+    <div class="bn-ticker">${s.ticker}</div>
+    <div class="bn-price">$${s.price} &nbsp;·&nbsp; ${mom} 3d</div>
+    <div class="bn-reasons">${reasons}</div>
+    ${news ? `<div class="bn-news-title">Recent news</div>${news}` : ''}
+    <div class="bn-meta">
+      ${sigPct !== null ? `<div class="bn-m">Model <span>${sigPct}%</span></div>` : ''}
+      <div class="bn-m">Volume <span>${s.volRatio}x</span></div>
+      <div class="bn-m">Score <span>${s.score}</span></div>
+    </div>
+  </div>`;
 }
 
 // ── Penny / Hype ───────────────────────────────────────────────────────────────

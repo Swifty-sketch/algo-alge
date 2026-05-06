@@ -32,6 +32,18 @@ _FEAT_DROP = {
     'ema_12', 'ema_26', 'sma_5', 'sma_10', 'sma_20', 'sma_50', 'sma_200',
 }
 
+_NEWS_POS = {
+    'surge', 'soar', 'beat', 'record', 'upgrade', 'rally', 'gain', 'rise', 'jump',
+    'strong', 'outperform', 'bullish', 'profit', 'raises', 'raised', 'upside',
+    'breakthrough', 'approved', 'approval', 'wins', 'expands', 'deal', 'buyback',
+    'dividend', 'growth', 'acquire', 'acquisition', 'partnership', 'top', 'best',
+}
+_NEWS_NEG = {
+    'fall', 'drop', 'miss', 'cut', 'downgrade', 'decline', 'loss', 'weak',
+    'underperform', 'bearish', 'warning', 'lawsuit', 'investigation', 'crash',
+    'plunge', 'slump', 'concern', 'delay', 'recall', 'fraud', 'fine', 'layoffs',
+}
+
 
 class _LogCapture:
     def write(self, text):
@@ -447,6 +459,113 @@ def api_penny_stocks():
         -x['mentions']
     ))
     return jsonify(results)
+
+
+def _get_news(ticker):
+    try:
+        import yfinance as yf
+        raw = yf.Ticker(ticker).news or []
+        score, headlines = 0, []
+        for item in raw[:8]:
+            c     = item.get('content', item) if isinstance(item, dict) else {}
+            title = (c.get('title') or item.get('title', '')) if isinstance(c, dict) else ''
+            if not title:
+                continue
+            headlines.append(title)
+            tl = title.lower()
+            for w in _NEWS_POS:
+                if w in tl: score += 1
+            for w in _NEWS_NEG:
+                if w in tl: score -= 1
+        return score, headlines[:4]
+    except Exception:
+        return 0, []
+
+
+@app.route('/api/buy-now')
+def api_buy_now():
+    swing_model = load_universal('swing')
+    all_tickers = list(dict.fromkeys(STOCKS + get_sp100()))
+    candidates  = []
+
+    for ticker in all_tickers:
+        try:
+            df = fetch(ticker, period='5y', interval='1d', use_cache=True)
+            if df is None or len(df) < 250:
+                continue
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            close = df['Close'].squeeze()
+            vol   = df['Volume'].squeeze()
+            price = round(float(close.iloc[-1]), 2)
+            vol_r = round(float(vol.iloc[-1] / vol.iloc[-20:].mean()), 2) if len(vol) >= 20 else 1.0
+            mom3d = round(float(close.pct_change(3).iloc[-1] * 100), 2)
+
+            ml_prob = None
+            if swing_model:
+                feat_df   = add_features(df)
+                feat_cols = [c for c in feat_df.columns if c not in _FEAT_DROP]
+                X = feat_df[feat_cols].replace([np.inf, -np.inf], np.nan).dropna()
+                if not X.empty:
+                    ml_prob = float(swing_model.predict_proba(X.iloc[[-1]])[:, 1][0])
+
+            candidates.append({'ticker': ticker, 'price': price,
+                                'vol_r': vol_r, 'mom3d': mom3d, 'ml_prob': ml_prob})
+        except Exception:
+            pass
+
+    # only fetch news for top 20 by ML signal to stay fast
+    candidates.sort(key=lambda x: -(x['ml_prob'] or 0))
+    results = []
+
+    for c in candidates[:20]:
+        news_score, headlines = _get_news(c['ticker'])
+        total, reasons = 0, []
+
+        if c['ml_prob'] and c['ml_prob'] >= 0.72:
+            total += 3
+            reasons.append(f"Model confidence {round(c['ml_prob'] * 100)}%")
+        elif c['ml_prob'] and c['ml_prob'] >= 0.65:
+            total += 1
+
+        if news_score >= 2:
+            total += 3
+            reasons.append('Strongly positive news')
+        elif news_score == 1:
+            total += 1
+            reasons.append('Positive news coverage')
+        elif news_score < 0:
+            total -= 2
+
+        if c['vol_r'] >= 2.0:
+            total += 2
+            reasons.append(f"Volume {c['vol_r']}x average")
+        elif c['vol_r'] >= 1.4:
+            total += 1
+            reasons.append(f"Volume {c['vol_r']}x average")
+
+        if c['mom3d'] >= 2.0:
+            total += 1
+            reasons.append(f"Up {c['mom3d']}% in 3 days")
+        elif c['mom3d'] <= -3.0:
+            total -= 1
+
+        if total >= 5 and reasons:
+            results.append({
+                'ticker':    c['ticker'],
+                'price':     c['price'],
+                'signal':    round(c['ml_prob'], 3) if c['ml_prob'] else None,
+                'volRatio':  c['vol_r'],
+                'mom3d':     c['mom3d'],
+                'newsScore': news_score,
+                'headlines': headlines,
+                'reasons':   reasons,
+                'score':     total,
+            })
+
+    results.sort(key=lambda x: -x['score'])
+    return jsonify(results[:8])
 
 
 if __name__ == '__main__':
