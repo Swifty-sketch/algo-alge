@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Trading Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0d;--card:#161616;--row:#1c1c1c;--border:#262626;
+  --text:#f0f0f0;--muted:#666;--green:#22c55e;--red:#ef4444;
+  --amber:#f59e0b;--blue:#3b82f6;--purple:#a855f7;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh}
+
+/* ── Landing ── */
+#landing{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center}
+.land-brand{font-size:.65rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:2rem}
+.land-title{font-size:clamp(2rem,5vw,3.5rem);font-weight:700;letter-spacing:-.04em;line-height:1.1;margin-bottom:1rem}
+.land-title span{color:var(--green)}
+.land-sub{font-size:1rem;color:var(--muted);max-width:520px;line-height:1.7;margin-bottom:2.5rem}
+.land-features{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;max-width:860px;width:100%;margin-bottom:2.5rem}
+.land-feat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.25rem;text-align:left}
+.lf-icon{font-size:1.4rem;margin-bottom:.5rem}
+.lf-title{font-size:.82rem;font-weight:600;margin-bottom:.3rem}
+.lf-desc{font-size:.75rem;color:var(--muted);line-height:1.5}
+.land-cta{display:inline-block;background:var(--green);color:#000;border:none;border-radius:12px;padding:.85rem 2.2rem;font-size:.95rem;font-weight:700;font-family:inherit;cursor:pointer;transition:opacity .15s;letter-spacing:-.01em}
+.land-cta:hover{opacity:.88}
+.land-note{margin-top:1.25rem;font-size:.72rem;color:var(--muted)}
+
+/* ── App (hidden until Enter) ── */
+#app{display:none;flex-direction:column;min-height:100vh}
+
+/* header */
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;padding:.85rem 1.5rem;border-bottom:1px solid var(--border);background:var(--card);position:sticky;top:0;z-index:20}
+.h-brand{font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.h-brand:hover{color:var(--text)}
+.h-right{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.btn{padding:.4rem .9rem;border-radius:8px;border:1px solid var(--border);font-size:.75rem;font-weight:600;font-family:inherit;cursor:pointer;transition:opacity .15s,border-color .15s}
+.btn-primary{background:var(--text);color:var(--bg);border-color:var(--text)}
+.btn-primary:hover{opacity:.85}
+.btn-ghost{background:none;color:var(--muted)}
+.btn-ghost:hover{border-color:#555;color:var(--text)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.pill{font-size:.68rem;padding:.22rem .6rem;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+.pill.running{color:var(--amber);border-color:var(--amber)}
+.pill.done{color:var(--green);border-color:var(--green)}
+
+/* tabs */
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--card);padding:0 1.5rem;overflow-x:auto}
+.tab{padding:.65rem 1rem;font-size:.78rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--text)}
+.tbadge{display:inline-block;background:var(--border);color:var(--muted);font-size:.58rem;padding:.08rem .32rem;border-radius:8px;margin-left:.3rem;vertical-align:middle}
+.tbadge.hot{background:rgba(239,68,68,.2);color:var(--red)}
+
+/* panes */
+.pane{display:none;max-width:1100px;margin:0 auto;padding:1.4rem}
+.pane.active{display:block}
+.sec-label{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem}
+
+/* signal cards */
+.sig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(144px,1fr));gap:.5rem;margin-bottom:1.6rem}
+.sc{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.85rem 1rem;cursor:pointer;transition:border-color .15s}
+.sc:hover{border-color:#444}.sc.active{border-color:var(--blue)}
+.sc.bull{border-left:3px solid var(--green)}.sc.bear{border-left:3px solid var(--red)}.sc.neutral{border-left:3px solid #333}.sc.dim{opacity:.4}
+.sc-tk{font-size:.66rem;font-weight:700;letter-spacing:.06em;color:var(--muted);margin-bottom:.28rem}
+.sc-pct{font-size:1.45rem;font-weight:700;letter-spacing:-.04em;line-height:1}
+.sc-pct.bull{color:var(--green)}.sc-pct.bear{color:var(--red)}.sc-pct.neutral{color:var(--amber)}
+.sc-price{font-size:.7rem;color:var(--muted);margin-top:.28rem}
+.sc-chg{font-size:.66rem;margin-top:.12rem}.sc-chg.pos{color:var(--green)}.sc-chg.neg{color:var(--red)}
+.sc-lbl{font-size:.56rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-top:.35rem}
+.sc-lbl.bull{color:var(--green)}.sc-lbl.bear{color:var(--red)}.sc-lbl.neutral{color:var(--amber)}
+
+/* chart */
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.35rem;margin-bottom:1.6rem}
+.chart-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;flex-wrap:wrap;gap:.5rem}
+.chart-tk{font-size:.92rem;font-weight:600}
+.chart-leg{display:flex;gap:.8rem;font-size:.68rem;color:var(--muted)}
+.ldot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px}
+.chart-empty{text-align:center;padding:2.5rem;color:var(--muted);font-size:.8rem}
+canvas{width:100%!important;max-height:290px}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin-bottom:1.4rem}
+table{width:100%;border-collapse:collapse;min-width:500px}
+th{padding:.55rem 1rem;text-align:left;font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);background:var(--card)}
+td{padding:.7rem 1rem;font-size:.8rem;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--row);cursor:pointer}
+.bar-wrap{width:90px;height:7px;background:var(--border);border-radius:3px;display:inline-block;vertical-align:middle}
+.bar-fill{height:100%;border-radius:3px;background:var(--green)}.bar-fill.bear{background:var(--red)}
+.tag{display:inline-block;padding:.12rem .38rem;border-radius:5px;font-size:.58rem;font-weight:700}
+.tg{background:rgba(34,197,94,.15);color:var(--green)}.tr{background:rgba(239,68,68,.15);color:var(--red)}
+.ta{background:rgba(245,158,11,.15);color:var(--amber)}.tb{background:rgba(59,130,246,.15);color:var(--blue)}
+.tp{background:rgba(168,85,247,.15);color:var(--purple)}
+.pos{color:var(--green);font-weight:600}.neg{color:var(--red);font-weight:600}
+.empty{text-align:center;padding:2.5rem;color:var(--muted);font-size:.8rem}
+
+/* scan */
+.scan-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;gap:.5rem;flex-wrap:wrap}
+.train-prompt{background:var(--card);border:1px dashed var(--border);border-radius:12px;padding:2rem;text-align:center;color:var(--muted)}
+.train-prompt strong{color:var(--text);display:block;margin-bottom:.4rem;font-size:.95rem}
+
+/* reddit grid */
+.reddit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.45rem}
+.rc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.7rem .85rem}
+.rc-tk{font-size:.78rem;font-weight:700}.rc-ct{font-size:.68rem;color:var(--muted);margin-top:.15rem}
+.rc-bar{margin-top:.4rem;height:3px;background:var(--border);border-radius:2px}
+.rc-fill{height:100%;border-radius:2px;background:var(--purple)}
+
+/* ── Penny stocks ── */
+.penny-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem}
+.penny-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.pc-head{padding:1rem 1.1rem .75rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+.pc-name{font-size:.68rem;color:var(--muted);margin-bottom:.2rem}
+.pc-ticker{font-size:1.05rem;font-weight:700}
+.pc-verdict{font-size:.62rem;font-weight:700;letter-spacing:.08em;padding:.28rem .6rem;border-radius:6px;white-space:nowrap;align-self:flex-start;margin-top:.1rem}
+.pv-sb{background:rgba(34,197,94,.2);color:var(--green)}
+.pv-b {background:rgba(34,197,94,.12);color:var(--green)}
+.pv-w {background:rgba(245,158,11,.15);color:var(--amber)}
+.pv-n {background:rgba(100,100,100,.15);color:var(--muted)}
+.pv-a {background:rgba(239,68,68,.15);color:var(--red)}
+.pc-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:.35rem;padding:.75rem 1.1rem;border-bottom:1px solid var(--border)}
+.pc-m{background:var(--bg);border-radius:8px;padding:.5rem .6rem}
+.pc-ml{font-size:.56rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.2rem}
+.pc-mv{font-size:.82rem;font-weight:600}
+.pc-section{padding:.75rem 1.1rem;border-bottom:1px solid var(--border)}
+.pc-section:last-child{border-bottom:none}
+.pc-stitle{font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem}
+.pc-quote{font-size:.75rem;color:#aaa;line-height:1.5;padding:.35rem .55rem;border-left:2px solid var(--border);margin-bottom:.3rem}
+.pc-summary{font-size:.75rem;color:#aaa;line-height:1.6}
+.pc-reasons{display:flex;flex-direction:column;gap:.3rem}
+.pc-reason{font-size:.73rem;color:var(--green);display:flex;gap:.4rem}
+.pc-reason::before{content:"+";}
+.pc-warn{font-size:.73rem;color:var(--amber);display:flex;gap:.4rem}
+.pc-warn::before{content:"!";}
+.signal-bar{height:6px;background:var(--border);border-radius:3px;margin-top:.5rem;overflow:hidden}
+.signal-fill{height:100%;border-radius:3px;background:var(--green);transition:width .4s}
+.signal-fill.bear{background:var(--red)}
+
+/* overlay */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:100;align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(4px)}
+.overlay.show{display:flex}
+.ov-card{background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:640px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+.ov-hdr{padding:1rem 1.2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.7rem}
+.spinner{width:15px;height:15px;border:2.5px solid var(--border);border-top-color:var(--amber);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+.spinner.done{border-top-color:var(--green);animation:none}.spinner.err{border-top-color:var(--red);animation:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ov-title{font-size:.88rem;font-weight:600;flex:1}
+.ov-status-wrap{display:flex;align-items:center;gap:.4rem}
+.ov-pulse{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.2s ease-in-out infinite;flex-shrink:0}
+.ov-pulse.done{background:var(--green);animation:none}
+@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+.ov-status{font-size:.7rem;color:var(--muted)}
+.ov-log{flex:1;overflow-y:auto;padding:.75rem 1rem;font-family:'Consolas','SF Mono',monospace;font-size:.7rem;line-height:1.7;color:#888;background:#080808}
+.ov-log .ok{color:var(--green)}.ov-log .warn{color:var(--amber)}.ov-log .err{color:var(--red)}.ov-log .head{color:var(--text);font-weight:600}
+.ov-foot{padding:.75rem 1.2rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
+.ov-close{background:var(--text);color:var(--bg);border:none;border-radius:8px;padding:.42rem 1.1rem;font-size:.78rem;font-weight:600;font-family:inherit;cursor:pointer;opacity:.35}
+.ov-close.ready{opacity:1}.ov-close.ready:hover{opacity:.85}
+</style>
+</head>
+<body>
+
+<!-- ── Landing Page ── -->
+<div id="landing">
+  <p class="land-brand">AI Trading Dashboard</p>
+  <h1 class="land-title">Find your next<br><span>winning trade</span></h1>
+  <p class="land-sub">Machine learning signals, penny stock hype detection, Reddit sentiment, and backtested strategies — all in one place.</p>
+
+  <div class="land-features">
+    <div class="land-feat">
+      <div class="lf-icon">📈</div>
+      <div class="lf-title">ML Signals</div>
+      <div class="lf-desc">XGBoost models trained on 5 years of price data. Swing (3-day) and long-term (1-year) forecasts.</div>
+    </div>
+    <div class="land-feat">
+      <div class="lf-icon">🔥</div>
+      <div class="lf-title">Penny & Hype Finder</div>
+      <div class="lf-desc">Scans Reddit for trending penny stocks. Full analysis: metrics, sentiment, company summary, buy rating.</div>
+    </div>
+    <div class="land-feat">
+      <div class="lf-icon">🌐</div>
+      <div class="lf-title">S&P 100 Scanner</div>
+      <div class="lf-desc">Scans all major US stocks and ranks them by ML signal strength. Refreshes on demand.</div>
+    </div>
+    <div class="land-feat">
+      <div class="lf-icon">💬</div>
+      <div class="lf-title">Reddit Tracker</div>
+      <div class="lf-desc">Live scrape of r/wallstreetbets, r/stocks, r/investing and more to surface what traders are discussing.</div>
+    </div>
+  </div>
+
+  <button class="land-cta" onclick="enterApp()">Open Dashboard</button>
+  <p class="land-note">Runs locally — your data never leaves your machine.</p>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+
+  <!-- Overlay -->
+  <div class="overlay" id="overlay">
+    <div class="ov-card">
+      <div class="ov-hdr">
+        <div class="spinner" id="ov-spinner"></div>
+        <span class="ov-title" id="ov-title">Working...</span>
+        <div class="ov-status-wrap">
+          <div class="ov-pulse" id="ov-pulse"></div>
+          <span class="ov-status" id="ov-status">Starting</span>
+        </div>
+      </div>
+      <div class="ov-log" id="ov-log"></div>
+      <div class="ov-foot"><button class="ov-close" id="ov-close" onclick="closeOverlay()" disabled>Close</button></div>
+    </div>
+  </div>
+
+  <header>
+    <span class="h-brand" onclick="goHome()">AI Trading Dashboard</span>
+    <div class="h-right">
+      <span class="pill" id="task-pill">Idle</span>
+      <button class="btn btn-ghost" id="btn-backtest" onclick="triggerBacktest()">Backtest SE</button>
+      <button class="btn btn-ghost" id="btn-train"    onclick="triggerTrain()">Train SE</button>
+      <button class="btn btn-primary" id="btn-train-us" onclick="triggerTrainUS()">Train US Models</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-my"       onclick="showTab('my')">My Stocks (SE)</div>
+    <div class="tab"        id="tab-penny"    onclick="showTab('penny')">Penny / Hype <span class="tbadge hot" id="badge-penny">NEW</span></div>
+    <div class="tab"        id="tab-swing"    onclick="showTab('swing')">Swing Trades <span class="tbadge">3d</span></div>
+    <div class="tab"        id="tab-longterm" onclick="showTab('longterm')">Long Term <span class="tbadge">1yr</span></div>
+    <div class="tab"        id="tab-reddit"   onclick="showTab('reddit')">Reddit <span class="tbadge" id="badge-reddit"></span></div>
+  </div>
+
+  <!-- My Stocks -->
+  <div class="pane active" id="pane-my">
+    <p class="sec-label">Current ML signals — click a card to load chart</p>
+    <div class="sig-grid" id="signals-grid"><div class="empty">Loading...</div></div>
+    <div class="chart-box">
+      <div class="chart-hdr">
+        <span class="chart-tk" id="chart-ticker">Select a stock above</span>
+        <div class="chart-leg">
+          <span><span class="ldot" style="background:#3b82f6"></span>Price</span>
+          <span><span class="ldot" style="background:#22c55e"></span>ML signal</span>
+          <span><span class="ldot" style="background:rgba(245,158,11,.4)"></span>Buy zone</span>
+        </div>
+      </div>
+      <div class="chart-empty" id="chart-empty">Click a signal card to view the chart.</div>
+      <canvas id="price-chart" style="display:none"></canvas>
+    </div>
+    <p class="sec-label">Backtest results</p>
+    <div class="tbl-wrap">
+      <div class="empty" id="bt-empty">No backtest results yet. Click "Backtest SE".</div>
+      <table id="bt-table" style="display:none">
+        <thead><tr><th>Stock</th><th>Strategy</th><th>Buy &amp; Hold</th><th>Sharpe</th><th>Max DD</th><th>Win rate</th><th>Trades</th></tr></thead>
+        <tbody id="bt-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Penny / Hype -->
+  <div class="pane" id="pane-penny">
+    <div class="scan-hdr">
+      <div>
+        <p class="sec-label">Penny &amp; hype stock finder</p>
+        <p style="font-size:.75rem;color:var(--muted)">Scans Reddit for trending cheap stocks. Includes ML signal, metrics, sentiment and a buy/avoid verdict.</p>
+      </div>
+      <button class="btn btn-ghost" onclick="loadPenny()">Refresh</button>
+    </div>
+    <div id="penny-content"><div class="empty">Loading Reddit data...</div></div>
+  </div>
+
+  <!-- Swing -->
+  <div class="pane" id="pane-swing">
+    <div class="scan-hdr">
+      <div>
+        <p class="sec-label">Swing trades — 3-day forecast</p>
+        <p style="font-size:.75rem;color:var(--muted)">Probability of 1.5%+ gain in 3 days. S&P 100 + Reddit picks.</p>
+      </div>
+      <button class="btn btn-ghost" onclick="loadScan('swing')">Refresh</button>
+    </div>
+    <div id="swing-content"><div class="empty">Loading...</div></div>
+  </div>
+
+  <!-- Long Term -->
+  <div class="pane" id="pane-longterm">
+    <div class="scan-hdr">
+      <div>
+        <p class="sec-label">Long term picks — 12-month forecast</p>
+        <p style="font-size:.75rem;color:var(--muted)">Probability of 20%+ gain over the next 12 months.</p>
+      </div>
+      <button class="btn btn-ghost" onclick="loadScan('longterm')">Refresh</button>
+    </div>
+    <div id="longterm-content"><div class="empty">Loading...</div></div>
+  </div>
+
+  <!-- Reddit -->
+  <div class="pane" id="pane-reddit">
+    <div class="scan-hdr">
+      <div>
+        <p class="sec-label">Trending on Reddit</p>
+        <p style="font-size:.75rem;color:var(--muted)">Most-mentioned tickers in r/wallstreetbets, r/stocks, r/investing, r/options</p>
+      </div>
+      <button class="btn btn-ghost" onclick="loadReddit()">Refresh</button>
+    </div>
+    <div id="reddit-content"><div class="empty">Loading...</div></div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+const API = '';
+let chartInstance = null, taskPoller = null, logPoller = null;
+let logOffset = 0, activeTab = 'my';
+
+// ── Landing ────────────────────────────────────────────────────────────────────
+function enterApp() {
+  document.getElementById('landing').style.display = 'none';
+  document.getElementById('app').style.display     = 'flex';
+  refreshSignals();
+  loadSummary();
+  pollTask();
+}
+function goHome() {
+  document.getElementById('app').style.display     = 'none';
+  document.getElementById('landing').style.display = 'flex';
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  activeTab = name;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('pane-' + name).classList.add('active');
+  if (name === 'penny')    loadPenny();
+  if (name === 'swing')    loadScan('swing');
+  if (name === 'longterm') loadScan('longterm');
+  if (name === 'reddit')   loadReddit();
+}
+
+// ── My Stocks ──────────────────────────────────────────────────────────────────
+async function refreshSignals() {
+  document.getElementById('signals-grid').innerHTML = '<div class="empty">Loading...</div>';
+  try {
+    const d = await apiFetch('/api/signals');
+    document.getElementById('signals-grid').innerHTML = d.map(s => {
+      if (!s.trained) return sigCard(s.ticker, null, null, null, 'Not trained');
+      if (s.signal === null) return sigCard(s.ticker, null, null, null, 'No data');
+      return sigCard(s.ticker, s.signal, s.price, s.change_1d, null, true);
+    }).join('');
+  } catch {
+    document.getElementById('signals-grid').innerHTML = '<div class="empty">Could not connect to server.</div>';
+  }
+}
+
+function sigCard(ticker, signal, price, chg, label, clickable) {
+  if (signal === null)
+    return `<div class="sc dim"><p class="sc-tk">${ticker}</p><p class="sc-pct neutral">—</p><p class="sc-lbl neutral">${label||'—'}</p></div>`;
+  const pct = Math.round(signal * 100);
+  const cls = pct >= 70 ? 'bull' : pct <= 45 ? 'bear' : 'neutral';
+  const lbl = pct >= 70 ? 'BUY signal' : pct <= 45 ? 'Avoid' : 'Neutral';
+  const cc  = (chg||0) >= 0 ? 'pos' : 'neg';
+  return `<div class="sc ${cls}" ${clickable?`onclick="loadChart('${ticker}',this)"`:''}">
+    <p class="sc-tk">${ticker}</p>
+    <p class="sc-pct ${cls}">${pct}%</p>
+    ${price ? `<p class="sc-price">${price}</p>` : ''}
+    ${chg !== null ? `<p class="sc-chg ${cc}">${(chg>=0?'+':'')}${chg}% today</p>` : ''}
+    <p class="sc-lbl ${cls}">${lbl}</p></div>`;
+}
+
+async function loadChart(ticker, el) {
+  document.querySelectorAll('.sc').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('chart-ticker').textContent = ticker;
+  document.getElementById('chart-empty').style.display = 'block';
+  document.getElementById('price-chart').style.display = 'none';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  try {
+    const d = await apiFetch(`/api/chart/${encodeURIComponent(ticker)}`);
+    renderChart(d);
+  } catch { document.getElementById('chart-empty').textContent = 'Failed to load chart.'; }
+}
+
+function renderChart({dates, prices, probabilities}) {
+  document.getElementById('chart-empty').style.display = 'none';
+  const canvas = document.getElementById('price-chart');
+  canvas.style.display = 'block';
+  const buyZone = probabilities.map(p => p >= 0.70 ? p : null);
+  chartInstance = new Chart(canvas.getContext('2d'), {
+    data: { labels: dates, datasets: [
+      {type:'line',label:'Price',data:prices,borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,.07)',borderWidth:2,pointRadius:0,yAxisID:'yP',fill:true,tension:.2},
+      {type:'line',label:'Signal',data:probabilities,borderColor:'#22c55e',borderWidth:1.5,pointRadius:0,yAxisID:'yS',fill:false,tension:.3},
+      {type:'bar',label:'Buy',data:buyZone,backgroundColor:'rgba(245,158,11,.15)',borderColor:'transparent',yAxisID:'yS',barPercentage:1,categoryPercentage:1},
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a1a1a',borderColor:'#333',borderWidth:1,titleColor:'#888',bodyColor:'#f0f0f0',
+        callbacks:{label:ctx=>ctx.dataset.label==='Price'?`  ${ctx.parsed.y}`:ctx.dataset.label==='Signal'?`  Signal: ${(ctx.parsed.y*100).toFixed(0)}%`:null}}},
+      scales:{x:{ticks:{color:'#555',maxTicksLimit:8,maxRotation:0},grid:{color:'#1a1a1a'}},
+        yP:{position:'left',ticks:{color:'#555'},grid:{color:'#1a1a1a'}},
+        yS:{position:'right',min:0,max:1,ticks:{color:'#555',callback:v=>(v*100).toFixed(0)+'%'},grid:{drawOnChartArea:false}}}}
+  });
+}
+
+async function loadSummary() {
+  try {
+    const d = await apiFetch('/api/summary');
+    const empty = document.getElementById('bt-empty'), tbl = document.getElementById('bt-table');
+    if (!d.length) { empty.style.display='block'; tbl.style.display='none'; return; }
+    empty.style.display='none'; tbl.style.display='table';
+    document.getElementById('bt-body').innerHTML = d.map(r => {
+      const ret=r['return_%']??0, bnh=r['bnh_%']??0, sh=r['sharpe']??0, dd=r['max_dd_%']??0, wr=r['win_rate_%']??0;
+      const stag=sh>=1.5?'tg':sh>=0.8?'ta':'tr';
+      return `<tr><td><strong>${r.ticker}</strong></td>
+        <td class="${ret>=0?'pos':'neg'}">${ret>=0?'+':''}${ret.toFixed(1)}%</td>
+        <td class="${bnh>=0?'pos':'neg'}">${bnh>=0?'+':''}${bnh.toFixed(1)}%</td>
+        <td><span class="tag ${stag}">${sh.toFixed(2)}</span></td>
+        <td class="neg">${dd.toFixed(1)}%</td><td>${wr.toFixed(1)}%</td><td>${r.trades}</td></tr>`;
+    }).join('');
+  } catch {}
+}
+
+// ── Penny / Hype ───────────────────────────────────────────────────────────────
+async function loadPenny() {
+  const el = document.getElementById('penny-content');
+  el.innerHTML = '<div class="empty">Scanning Reddit for penny stocks... takes ~30 seconds.</div>';
+  try {
+    const data = await apiFetch('/api/penny-stocks');
+    if (!data.length) { el.innerHTML = '<div class="empty">No penny stocks found right now. Try again later.</div>'; return; }
+    document.getElementById('badge-penny').textContent = data.length;
+    el.innerHTML = `<div class="penny-grid">${data.map(pennyCard).join('')}</div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+  }
+}
+
+function fmtCap(v) {
+  if (!v) return '—';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(1) + 'M';
+  return '$' + (v/1e3).toFixed(0) + 'K';
+}
+
+function pennyCard(s) {
+  const vcls  = {'STRONG BUY':'pv-sb',BUY:'pv-b',WATCH:'pv-w',NEUTRAL:'pv-n',AVOID:'pv-a'}[s.verdict] || 'pv-n';
+  const sigPct = s.signal !== null ? Math.round(s.signal * 100) : null;
+  const sigCls = sigPct >= 70 ? '' : 'bear';
+  const mPct   = s.mom5d !== null ? s.mom5d : null;
+
+  const posts = (s.posts||[]).slice(0,3).map(p =>
+    `<div class="pc-quote">"${p.length>90?p.slice(0,90)+'...':p}"</div>`).join('');
+
+  const reasons = (s.reasons||[]).map(r => `<div class="pc-reason">${r}</div>`).join('');
+  const warnings = (s.warnings||[]).map(w => `<div class="pc-warn">${w}</div>`).join('');
+
+  return `<div class="penny-card">
+    <div class="pc-head">
+      <div>
+        <div class="pc-name">${s.name||s.ticker}</div>
+        <div class="pc-ticker">${s.ticker} &nbsp;<span style="font-size:.7rem;color:var(--muted);font-weight:400">${s.sector||''}</span></div>
+      </div>
+      <span class="pc-verdict ${vcls}">${s.verdict}</span>
+    </div>
+
+    <div class="pc-metrics">
+      <div class="pc-m"><div class="pc-ml">Price</div><div class="pc-mv">$${s.price}</div></div>
+      <div class="pc-m"><div class="pc-ml">Mkt Cap</div><div class="pc-mv">${fmtCap(s.marketCap)}</div></div>
+      <div class="pc-m"><div class="pc-ml">Volume</div><div class="pc-mv">${s.volRatio ? s.volRatio+'x avg' : '—'}</div></div>
+      <div class="pc-m"><div class="pc-ml">52W High</div><div class="pc-mv">${s.week52High ? '$'+s.week52High : '—'}</div></div>
+      <div class="pc-m"><div class="pc-ml">52W Low</div><div class="pc-mv">${s.week52Low ? '$'+s.week52Low : '—'}</div></div>
+      <div class="pc-m"><div class="pc-ml">5d Move</div>
+        <div class="pc-mv ${mPct!==null?(mPct>=0?'pos':'neg'):''}">${mPct!==null?(mPct>=0?'+':'')+mPct+'%':'—'}</div>
+      </div>
+    </div>
+
+    ${sigPct !== null ? `
+    <div class="pc-section">
+      <div class="pc-stitle">ML Swing Signal</div>
+      <div style="display:flex;align-items:center;gap:.6rem">
+        <div class="signal-bar" style="flex:1"><div class="signal-fill ${sigCls}" style="width:${sigPct}%"></div></div>
+        <span style="font-size:.8rem;font-weight:600;color:${sigPct>=70?'var(--green)':'var(--red)'}">${sigPct}%</span>
+      </div>
+    </div>` : ''}
+
+    ${s.mentions ? `
+    <div class="pc-section">
+      <div class="pc-stitle">Why it's trending — ${s.mentions} Reddit mention${s.mentions!==1?'s':''}</div>
+      ${posts || '<div style="font-size:.73rem;color:var(--muted)">No post titles captured.</div>'}
+    </div>` : ''}
+
+    ${s.summary ? `
+    <div class="pc-section">
+      <div class="pc-stitle">About</div>
+      <div class="pc-summary">${s.summary}${s.summary.length>=300?'...':''}</div>
+    </div>` : ''}
+
+    <div class="pc-section">
+      <div class="pc-stitle">Verdict — ${s.verdict}</div>
+      <div class="pc-reasons">
+        ${reasons}${warnings}
+        ${!reasons && !warnings ? '<div style="font-size:.73rem;color:var(--muted)">Not enough data to analyze.</div>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Scanner ────────────────────────────────────────────────────────────────────
+async function loadScan(type) {
+  const el = document.getElementById(type==='swing'?'swing-content':'longterm-content');
+  el.innerHTML = '<div class="empty">Scanning... may take 30-60 seconds.</div>';
+  try {
+    const st = await apiFetch('/api/universal-status');
+    if (!(type==='swing'?st.swing:st.longterm)) {
+      el.innerHTML = `<div class="train-prompt"><strong>No ${type} model trained yet</strong>
+        Click "Train US Models" to train on S&P 100 stocks (~10-15 min).
+        <br><br><button class="btn btn-primary" onclick="triggerTrainUS()">Train US Models</button></div>`; return;
+    }
+    const d = await apiFetch(`/api/scan/${type}`);
+    renderScan(el, d, type);
+  } catch (e) { el.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+}
+
+function renderScan(el, data, type) {
+  if (!data.length) { el.innerHTML = '<div class="empty">No results.</div>'; return; }
+  const bull = data.filter(r => r.signal >= 0.70);
+  const bear = data.filter(r => r.signal <= 0.45);
+  const label = type==='swing' ? '1.5%+ gain in 3 days' : '20%+ gain in 12 months';
+
+  function rows(arr) {
+    return arr.map(r => {
+      const pct = Math.round(r.signal*100);
+      const cls = pct>=70?'':'bear';
+      const cc  = (r.change_1d||0)>=0?'pos':'neg';
+      const src = (r.source||'').includes('Reddit')
+        ? '<span class="tag tp">Reddit</span>' : '<span class="tag tb">S&P100</span>';
+      return `<tr onclick="switchAndChart('${r.ticker}')">
+        <td><strong>${r.ticker}</strong></td>
+        <td>${r.price?'$'+r.price:'—'}</td>
+        <td class="${cc}">${r.change_1d!==null?(r.change_1d>=0?'+':'')+r.change_1d+'%':'—'}</td>
+        <td><div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+            <span style="margin-left:.45rem;font-size:.73rem;color:${pct>=70?'var(--green)':'var(--red)'}">${pct}%</span></td>
+        <td>${src}</td></tr>`;
+    }).join('');
+  }
+
+  el.innerHTML = `
+    <p class="sec-label" style="color:var(--green);margin-bottom:.5rem">BUY signals (70%+) — ${label}</p>
+    <div class="tbl-wrap" style="margin-bottom:1.25rem">
+      ${bull.length?`<table><thead><tr><th>Ticker</th><th>Price</th><th>Today</th><th>Signal</th><th>Source</th></tr></thead>
+      <tbody>${rows(bull)}</tbody></table>`:'<div class="empty">No strong buy signals right now.</div>'}
+    </div>
+    <p class="sec-label" style="color:var(--red);margin-bottom:.5rem">Avoid (below 45%)</p>
+    <div class="tbl-wrap">
+      <table><thead><tr><th>Ticker</th><th>Price</th><th>Today</th><th>Signal</th><th>Source</th></tr></thead>
+      <tbody>${rows(bear.slice(0,10))}</tbody></table>
+    </div>`;
+}
+
+function switchAndChart(ticker) {
+  showTab('my');
+  loadChart(ticker, null);
+}
+
+// ── Reddit ─────────────────────────────────────────────────────────────────────
+async function loadReddit() {
+  document.getElementById('reddit-content').innerHTML = '<div class="empty">Fetching...</div>';
+  try {
+    const d = await apiFetch('/api/reddit');
+    if (d.error) throw new Error(d.error);
+    const max = Math.max(...d.map(x=>x.mentions),1);
+    document.getElementById('badge-reddit').textContent = d.length;
+    document.getElementById('reddit-content').innerHTML =
+      `<div class="reddit-grid">${d.map(x=>`<div class="rc">
+        <p class="rc-tk">${x.ticker}</p>
+        <p class="rc-ct">${x.mentions} mention${x.mentions!==1?'s':''}</p>
+        <div class="rc-bar"><div class="rc-fill" style="width:${Math.round(x.mentions/max*100)}%"></div></div>
+      </div>`).join('')}</div>`;
+  } catch (e) {
+    document.getElementById('reddit-content').innerHTML = `<div class="empty">Could not load Reddit: ${e.message}</div>`;
+  }
+}
+
+// ── Task / Overlay ─────────────────────────────────────────────────────────────
+async function triggerTrain()   { if(!confirm('Train SE stock models?'))return; await apiFetch('/api/train','POST'); openOverlay('Training Swedish stock models...'); startPolling(); }
+async function triggerTrainUS() { if(!confirm('Train Swing + Long Term models on S&P 100?\nExpect 10-20 minutes.'))return; await apiFetch('/api/train-universal','POST'); openOverlay('Training US market models (S&P 100)...'); startPolling(); }
+async function triggerBacktest(){ await apiFetch('/api/backtest','POST'); openOverlay('Running backtest...'); startPolling(); }
+
+function openOverlay(title) {
+  logOffset=0;
+  document.getElementById('ov-title').textContent  = title;
+  document.getElementById('ov-status').textContent = 'Starting...';
+  document.getElementById('ov-log').innerHTML      = '';
+  document.getElementById('ov-spinner').className  = 'spinner';
+  document.getElementById('ov-pulse').className    = 'ov-pulse';
+  document.getElementById('ov-close').disabled     = true;
+  document.getElementById('ov-close').className    = 'ov-close';
+  document.getElementById('overlay').classList.add('show');
+  logPoller = setInterval(pollLog, 400);
+}
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); clearInterval(logPoller); logPoller=null; }
+
+async function pollLog() {
+  try {
+    const d = await apiFetch(`/api/log?since=${logOffset}`);
+    if (!d.lines.length) return;
+    const box = document.getElementById('ov-log');
+    d.lines.forEach(line => {
+      const div=document.createElement('div'), l=line.toLowerCase();
+      if (l.includes('error')||l.includes('[skip]'))  div.className='err';
+      else if (l.includes('warn'))                     div.className='warn';
+      else if (l.includes('[saved]')||l.includes('auc')||l.includes('[ok]')) div.className='ok';
+      else if (l.startsWith('===')||l.startsWith('[train')||l.startsWith('[back')||l.startsWith('[univ')) div.className='head';
+      div.textContent=line; box.appendChild(div);
+    });
+    box.scrollTop=box.scrollHeight; logOffset=d.total;
+  } catch {}
+}
+
+function startPolling() {
+  if (taskPoller) return;
+  taskPoller=setInterval(pollTask,1500); pollTask();
+}
+
+async function pollTask() {
+  try {
+    const t=await apiFetch('/api/task-status');
+    const pill=document.getElementById('task-pill');
+    pill.textContent=t.message;
+    pill.className='pill'+(t.running?' running':t.message==='Done'?' done':'');
+    ['btn-train','btn-train-us','btn-backtest'].forEach(id=>document.getElementById(id).disabled=t.running);
+    document.getElementById('ov-status').textContent=t.message;
+    if (!t.running) {
+      clearInterval(taskPoller); taskPoller=null;
+      clearInterval(logPoller);  logPoller=null;
+      document.getElementById('ov-spinner').className=t.message==='Done'?'spinner done':'spinner err';
+      document.getElementById('ov-pulse').className='ov-pulse done';
+      if (t.message==='Done') document.getElementById('ov-title').textContent='Complete!';
+      document.getElementById('ov-close').disabled=false;
+      document.getElementById('ov-close').className='ov-close ready';
+      await pollLog();
+      refreshSignals(); loadSummary();
+      if (activeTab==='swing')    loadScan('swing');
+      if (activeTab==='longterm') loadScan('longterm');
+    }
+  } catch {}
+}
+
+async function apiFetch(path,method='GET') {
+  const res=await fetch(API+path,{method,headers:{'Content-Type':'application/json'}});
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+</script>
+</body>
+</html>

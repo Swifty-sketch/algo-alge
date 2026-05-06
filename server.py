@@ -1,0 +1,454 @@
+import os, sys, threading
+import numpy as np
+from datetime import datetime
+
+from flask import Flask, jsonify, send_file, request
+from flask_cors import CORS
+import pandas as pd
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from config import (STOCKS, PERIOD, INTERVAL, FORWARD_DAYS, THRESHOLD,
+                    TEST_SPLIT, XGB_PARAMS, INITIAL_CASH, COMMISSION,
+                    ENTER_THRESH, EXIT_THRESH)
+from src.fetch_data import fetch
+from src.features import add_features
+from src.train import train_all, load_model
+from src.backtest import run_all
+from src.scanner import train_universal, scan, load_universal, SWING_CFG, LONGTERM_CFG
+from src.universe import get_sp100, get_reddit_tickers
+
+app = Flask(__name__)
+CORS(app)
+
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), 'results')
+MODELS_DIR  = os.path.join(os.path.dirname(__file__), 'models')
+
+_task = {'running': False, 'message': 'Idle', 'updated': None}
+_log  = []
+
+_FEAT_DROP = {
+    'Open', 'High', 'Low', 'Close', 'Volume', 'Dividends', 'Stock Splits',
+    'ema_12', 'ema_26', 'sma_5', 'sma_10', 'sma_20', 'sma_50', 'sma_200',
+}
+
+
+class _LogCapture:
+    def write(self, text):
+        try:
+            sys.__stdout__.write(text)
+        except UnicodeEncodeError:
+            safe = text.encode(sys.__stdout__.encoding or 'utf-8', errors='replace') \
+                       .decode(sys.__stdout__.encoding or 'utf-8', errors='replace')
+            sys.__stdout__.write(safe)
+        line = text.rstrip()
+        if line:
+            _log.append(line)
+            if len(_log) > 1000:
+                del _log[0]
+    def flush(self):
+        sys.__stdout__.flush()
+
+
+def _run_task(fn):
+    global _task, _log
+    _log  = []
+    _task = {'running': True, 'message': 'Running...', 'updated': datetime.now().isoformat()}
+    old_stdout = sys.stdout
+    sys.stdout = _LogCapture()
+    try:
+        fn()
+        _task = {'running': False, 'message': 'Done', 'updated': datetime.now().isoformat()}
+    except Exception as e:
+        _task = {'running': False, 'message': f'Error: {e}', 'updated': datetime.now().isoformat()}
+        print(f'ERROR: {e}')
+    finally:
+        sys.stdout = old_stdout
+
+
+def _get_proba(model, df):
+    feat_df   = add_features(df)
+    feat_cols = [c for c in feat_df.columns if c not in _FEAT_DROP]
+    X = feat_df[feat_cols].replace([np.inf, -np.inf], np.nan).dropna()
+    if X.empty:
+        return None, None
+    proba = model.predict_proba(X)[:, 1]
+    return pd.Series(proba, index=X.index), feat_cols
+
+
+# ── Swedish stocks (my stocks) ─────────────────────────────────────────────────
+
+@app.route('/')
+def index():
+    return send_file('dashboard.html')
+
+
+@app.route('/api/signals')
+def get_signals():
+    results = []
+    for ticker in STOCKS:
+        model = load_model(ticker)
+        entry = {'ticker': ticker, 'trained': model is not None,
+                 'signal': None, 'price': None, 'change_1d': None, 'error': None}
+        if model:
+            try:
+                df = fetch(ticker, period='5y', interval='1d', use_cache=True)
+                if df is not None and len(df) > 60:
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = df.columns.get_level_values(0)
+                    proba_s, _ = _get_proba(model, df)
+                    if proba_s is not None and len(proba_s):
+                        close = df['Close'].squeeze()
+                        entry['signal']    = round(float(proba_s.iloc[-1]), 3)
+                        entry['price']     = round(float(close.iloc[-1]), 2)
+                        entry['change_1d'] = round(float(close.pct_change().iloc[-1]) * 100, 2)
+                    else:
+                        entry['error'] = 'No valid feature rows'
+            except Exception as e:
+                entry['error'] = str(e)
+        results.append(entry)
+    return jsonify(results)
+
+
+@app.route('/api/summary')
+def get_summary():
+    path = os.path.join(RESULTS_DIR, 'summary.csv')
+    if not os.path.exists(path):
+        return jsonify([])
+    df = pd.read_csv(path, index_col=0)
+    return jsonify(df.reset_index().rename(columns={'index': 'ticker'}).to_dict(orient='records'))
+
+
+@app.route('/api/chart/<path:ticker>')
+def get_chart(ticker):
+    ticker = ticker.upper()
+    df = fetch(ticker, period='2y', interval='1d', use_cache=True)
+    if df is None:
+        return jsonify({'error': 'No data'}), 404
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+
+    df = df[['Close']].copy()
+    df.index = pd.to_datetime(df.index)
+
+    probs = []
+    # try per-stock model first, then universal swing
+    model = load_model(ticker) or load_universal('swing')
+    if model:
+        full = fetch(ticker, period='2y', interval='1d', use_cache=True)
+        if isinstance(full.columns, pd.MultiIndex):
+            full.columns = full.columns.get_level_values(0)
+        proba_s, _ = _get_proba(model, full)
+        if proba_s is not None:
+            aligned = proba_s.reindex(df.index).ffill().fillna(0)
+            probs   = [round(float(x), 3) for x in aligned]
+
+    dates  = df.index.strftime('%Y-%m-%d').tolist()
+    prices = [round(float(x), 2) for x in df['Close']]
+    return jsonify({'dates': dates, 'prices': prices, 'probabilities': probs})
+
+
+@app.route('/api/task-status')
+def task_status():
+    return jsonify(_task)
+
+
+@app.route('/api/log')
+def get_log():
+    since = int(request.args.get('since', 0))
+    return jsonify({'lines': _log[since:], 'total': len(_log)})
+
+
+@app.route('/api/train', methods=['POST'])
+def trigger_train():
+    if _task['running']:
+        return jsonify({'error': 'Already running'}), 409
+    kw = dict(period=PERIOD, interval=INTERVAL, forward_days=FORWARD_DAYS,
+              threshold=THRESHOLD, test_split=TEST_SPLIT, xgb_params=XGB_PARAMS,
+              use_cache=True, save=True)
+    threading.Thread(target=_run_task,
+                     args=(lambda: train_all(STOCKS, **kw),),
+                     daemon=True).start()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/backtest', methods=['POST'])
+def trigger_backtest():
+    if _task['running']:
+        return jsonify({'error': 'Already running'}), 409
+    kw = dict(period=PERIOD, interval=INTERVAL, cash=INITIAL_CASH,
+              commission=COMMISSION, enter_threshold=ENTER_THRESH,
+              exit_threshold=EXIT_THRESH, use_cache=True, plot=True)
+    threading.Thread(target=_run_task,
+                     args=(lambda: run_all(STOCKS, **kw),),
+                     daemon=True).start()
+    return jsonify({'ok': True})
+
+
+# ── US market scanner ──────────────────────────────────────────────────────────
+
+@app.route('/api/train-universal', methods=['POST'])
+def trigger_train_universal():
+    if _task['running']:
+        return jsonify({'error': 'Already running'}), 409
+    tickers = get_sp100()
+
+    def _train_both():
+        train_universal(tickers, 'swing',    **SWING_CFG)
+        train_universal(tickers, 'longterm', **LONGTERM_CFG)
+
+    threading.Thread(target=_run_task, args=(_train_both,), daemon=True).start()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/scan/<model_type>')
+def api_scan(model_type):
+    if model_type not in ('swing', 'longterm'):
+        return jsonify({'error': 'Unknown model type'}), 400
+
+    sp100 = get_sp100()
+
+    # add validated reddit tickers to the pool
+    reddit_raw = []
+    try:
+        reddit_raw = get_reddit_tickers(limit=25)
+    except Exception as e:
+        print(f'[reddit] fetch error: {e}')
+
+    reddit_tickers = [t for t, _ in reddit_raw]
+    all_tickers    = list(dict.fromkeys(sp100 + reddit_tickers))  # dedupe, preserve order
+
+    results = scan(all_tickers, model_type)
+
+    # tag each result with its source
+    sp100_set      = set(sp100)
+    reddit_set     = set(reddit_tickers)
+    for r in results:
+        sources = []
+        if r['ticker'] in sp100_set:
+            sources.append('S&P100')
+        if r['ticker'] in reddit_set:
+            sources.append('Reddit')
+        r['source'] = ', '.join(sources) if sources else 'Other'
+
+    return jsonify(results)
+
+
+@app.route('/api/reddit')
+def api_reddit():
+    try:
+        tickers = get_reddit_tickers(limit=30)
+        return jsonify([{'ticker': t, 'mentions': c} for t, c in tickers])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/universal-status')
+def universal_status():
+    return jsonify({
+        'swing':    os.path.exists(os.path.join(MODELS_DIR, '_universal_swing.pkl')),
+        'longterm': os.path.exists(os.path.join(MODELS_DIR, '_universal_longterm.pkl')),
+    })
+
+
+# ── Penny / hype stock finder ──────────────────────────────────────────────────
+
+_PENNY_SUBS = ['pennystocks', 'smallstreetbets', 'RobinHoodPennyStocks',
+               'wallstreetbets', 'stocks']
+_PENNY_HEADERS = {'User-Agent': 'trading-algo/1.0'}
+
+
+def _scrape_penny_reddit(limit=30):
+    import re, requests as req
+    ticker_re  = re.compile(r'(?<!\w)\$?([A-Z]{2,5})(?!\w)')
+    blacklist  = {'A','I','OR','FOR','ARE','THE','AN','AT','IN','ON','UP','GO',
+                  'IT','BE','BY','TO','DO','OF','IF','US','ALL','NEW','NOW','HOW',
+                  'BIG','LOW','HIGH','BUY','SELL','HOLD','DD','TA','IMO','YOLO',
+                  'WSB','ETF','IPO','CEO','USD','SPY','QQQ','IWM','VIX','EV','AI'}
+    mentions   = {}
+    posts_by_t = {}
+
+    for sub in _PENNY_SUBS:
+        try:
+            url  = f'https://www.reddit.com/r/{sub}/hot.json?limit={limit}'
+            resp = req.get(url, headers=_PENNY_HEADERS, timeout=8)
+            if resp.status_code != 200:
+                continue
+            for post in resp.json()['data']['children']:
+                d     = post['data']
+                title = d.get('title', '')
+                body  = d.get('selftext', '')[:500]
+                text  = title + ' ' + body
+                found = set()
+                for m in ticker_re.finditer(text):
+                    t = m.group(1)
+                    if t not in blacklist and 2 <= len(t) <= 5:
+                        found.add(t)
+                for t in found:
+                    mentions[t]   = mentions.get(t, 0) + 1
+                    if t not in posts_by_t:
+                        posts_by_t[t] = []
+                    if len(posts_by_t[t]) < 4:
+                        posts_by_t[t].append(title)
+        except Exception as e:
+            print(f'[penny reddit] {sub}: {e}')
+
+    return mentions, posts_by_t
+
+
+def _make_recommendation(signal, vol_ratio, mom_5d, market_cap):
+    score    = 0
+    reasons  = []
+    warnings = []
+
+    if signal is not None:
+        if signal >= 0.70:
+            score += 3
+            reasons.append(f'ML model is {round(signal*100)}% confident in near-term upside')
+        elif signal >= 0.55:
+            score += 1
+            reasons.append(f'ML model shows mild bullish pattern ({round(signal*100)}%)')
+        else:
+            score -= 2
+            warnings.append(f'ML model is bearish ({round(signal*100)}% — below 55%)')
+
+    if vol_ratio is not None:
+        if vol_ratio >= 4:
+            score += 3
+            reasons.append(f'Volume is {vol_ratio:.1f}x above average — heavy unusual buying')
+        elif vol_ratio >= 2:
+            score += 2
+            reasons.append(f'Volume is {vol_ratio:.1f}x above average — elevated interest')
+        elif vol_ratio >= 1.3:
+            score += 1
+            reasons.append(f'Volume slightly above average ({vol_ratio:.1f}x)')
+        elif vol_ratio < 0.5:
+            score -= 1
+            warnings.append('Volume is very low — low liquidity risk')
+
+    if mom_5d is not None:
+        if mom_5d >= 0.15:
+            score += 2
+            reasons.append(f'Strong 5-day momentum (+{mom_5d:.0%})')
+        elif mom_5d >= 0.05:
+            score += 1
+            reasons.append(f'Positive 5-day momentum (+{mom_5d:.0%})')
+        elif mom_5d <= -0.15:
+            score -= 2
+            warnings.append(f'Steep 5-day decline ({mom_5d:.0%}) — could be selling pressure')
+        elif mom_5d <= -0.05:
+            score -= 1
+            warnings.append(f'Negative 5-day momentum ({mom_5d:.0%})')
+
+    if market_cap:
+        if market_cap < 10_000_000:
+            warnings.append('Micro-cap (<$10M) — very high manipulation risk')
+        elif market_cap < 50_000_000:
+            warnings.append('Small market cap (<$50M) — elevated volatility risk')
+
+    if score >= 5:
+        verdict = 'STRONG BUY'
+    elif score >= 3:
+        verdict = 'BUY'
+    elif score >= 1:
+        verdict = 'WATCH'
+    elif score >= -1:
+        verdict = 'NEUTRAL'
+    else:
+        verdict = 'AVOID'
+
+    return verdict, reasons, warnings
+
+
+@app.route('/api/penny-stocks')
+def api_penny_stocks():
+    import yfinance as yf
+
+    mentions, posts_by_t = _scrape_penny_reddit(limit=30)
+    if not mentions:
+        return jsonify([])
+
+    # sort by mentions, take top 20 candidates
+    candidates = sorted(mentions.items(), key=lambda x: -x[1])[:20]
+    swing_model = load_universal('swing')
+
+    results = []
+    for ticker, mention_count in candidates:
+        try:
+            info = yf.Ticker(ticker).info
+            price = info.get('currentPrice') or info.get('regularMarketPrice')
+            if not price or price > 20:          # only stocks under $20
+                continue
+            if price < 0.001:
+                continue
+
+            mkt_cap     = info.get('marketCap')
+            volume      = info.get('volume') or info.get('regularMarketVolume', 0)
+            avg_volume  = info.get('averageVolume', 0)
+            vol_ratio   = round(volume / avg_volume, 2) if avg_volume else None
+            week52_high = info.get('fiftyTwoWeekHigh')
+            week52_low  = info.get('fiftyTwoWeekLow')
+            sector      = info.get('sector', 'Unknown')
+            industry    = info.get('industry', '')
+            name        = info.get('shortName') or info.get('longName') or ticker
+            summary     = (info.get('longBusinessSummary') or '')[:300]
+            pe          = info.get('trailingPE')
+
+            # 5-day momentum
+            hist    = yf.Ticker(ticker).history(period='10d', interval='1d')
+            mom_5d  = None
+            if len(hist) >= 5:
+                mom_5d = float((hist['Close'].iloc[-1] - hist['Close'].iloc[-5]) / hist['Close'].iloc[-5])
+
+            # ML signal
+            signal = None
+            if swing_model:
+                try:
+                    df_hist = yf.Ticker(ticker).history(period='2y', interval='1d')
+                    if len(df_hist) >= 250:
+                        df_hist = df_hist[['Open','High','Low','Close','Volume']].copy()
+                        feat_df   = add_features(df_hist)
+                        feat_cols = [c for c in feat_df.columns if c not in _FEAT_DROP]
+                        X = feat_df[feat_cols].replace([np.inf,-np.inf], np.nan).dropna()
+                        if not X.empty:
+                            signal = round(float(swing_model.predict_proba(X.iloc[[-1]])[:,1][0]), 3)
+                except Exception:
+                    pass
+
+            verdict, reasons, warnings = _make_recommendation(signal, vol_ratio, mom_5d, mkt_cap)
+
+            results.append({
+                'ticker':       ticker,
+                'name':         name,
+                'price':        round(float(price), 4),
+                'marketCap':    mkt_cap,
+                'volume':       volume,
+                'avgVolume':    avg_volume,
+                'volRatio':     vol_ratio,
+                'week52High':   round(float(week52_high), 4) if week52_high else None,
+                'week52Low':    round(float(week52_low), 4) if week52_low else None,
+                'sector':       sector,
+                'industry':     industry,
+                'pe':           round(float(pe), 1) if pe else None,
+                'mom5d':        round(mom_5d * 100, 2) if mom_5d is not None else None,
+                'signal':       signal,
+                'mentions':     mention_count,
+                'posts':        posts_by_t.get(ticker, []),
+                'summary':      summary,
+                'verdict':      verdict,
+                'reasons':      reasons,
+                'warnings':     warnings,
+            })
+        except Exception as e:
+            print(f'[penny] {ticker}: {e}')
+
+    results.sort(key=lambda x: (
+        {'STRONG BUY': 0, 'BUY': 1, 'WATCH': 2, 'NEUTRAL': 3, 'AVOID': 4}.get(x['verdict'], 5),
+        -x['mentions']
+    ))
+    return jsonify(results)
+
+
+if __name__ == '__main__':
+    print('Dashboard running at http://localhost:8080')
+    app.run(host='0.0.0.0', port=8080, debug=False)
