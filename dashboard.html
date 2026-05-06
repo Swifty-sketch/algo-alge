@@ -449,7 +449,7 @@ async function _fetchCustomSignal(ticker) {
     div.innerHTML = `
       <button class="sc-remove" onclick="removeCustomTicker('${ticker}')">×</button>
       <p class="sc-tk">${ticker}</p>
-      <p style="font-size:.65rem;color:var(--red);margin-top:.3rem">Not found</p>`;
+      <p style="font-size:.65rem;color:var(--red);margin-top:.3rem;line-height:1.4">${e.message}</p>`;
   }
 }
 
@@ -826,7 +826,10 @@ async function pollTask() {
 
 async function apiFetch(path,method='GET') {
   const res=await fetch(API+path,{method,headers:{'Content-Type':'application/json'}});
-  if (!res.ok) throw new Error(res.statusText);
+  if (!res.ok) {
+    try { const j=await res.json(); throw new Error(j.error||res.statusText); }
+    catch(e) { if(e.message!==res.statusText) throw e; throw new Error(res.statusText); }
+  }
   return res.json();
 }
 </script>

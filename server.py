@@ -488,7 +488,8 @@ def api_single_signal(ticker):
         prob      = float(model.predict_proba(X.iloc[[-1]])[:, 1][0])
         close     = df['Close'].squeeze()
         price     = round(float(close.iloc[-1]), 2)
-        change_1d = round(float(close.pct_change().iloc[-1]) * 100, 2)
+        raw_chg   = close.pct_change().iloc[-1]
+        change_1d = round(float(raw_chg) * 100, 2) if np.isfinite(raw_chg) else 0.0
         label     = 'BUY' if prob >= 0.70 else ('SELL' if prob <= 0.45 else 'HOLD')
 
         return jsonify({'ticker': ticker, 'signal': round(prob, 3),
